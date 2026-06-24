@@ -1,0 +1,170 @@
+{% extends 'portal/base.html' %}
+
+{% load static %}
+
+{% block title %}Question Papers{% endblock %}
+
+{% block extra_css %}
+
+<link rel="stylesheet" href="{% static 'css/faculty-portal.css' %}?v=3">
+
+{% endblock %}
+
+{% block content %}
+
+
+
+<div class="fac-page">
+
+
+
+    <section class="fac-hero">
+
+        <div class="fac-hero-inner">
+
+            <div class="fac-hero-left">
+
+                <div class="fac-hero-icon"><i class="bi bi-file-earmark-word"></i></div>
+
+                <div class="fac-hero-text">
+
+                    <div class="fac-hero-label">Faculty Portal</div>
+
+                    <h1 class="fac-hero-title">Question Papers</h1>
+
+                    <p class="fac-hero-sub">Phase-wise IPE/GP papers · {{ department.name }}</p>
+
+                </div>
+
+            </div>
+
+            <div class="fac-hero-tag">{{ papers|length }} Paper{{ papers|length|pluralize }}</div>
+
+        </div>
+
+    </section>
+
+
+
+    <div class="fac-filter">
+
+        <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
+
+            <label for="subject-filter">Subject</label>
+
+            <select id="subject-filter" name="subject" class="form-select" onchange="this.form.submit()">
+
+                <option value="">All Subjects</option>
+
+                {% for s in subjects %}
+
+                <option value="{{ s.pk }}" {% if subject_filter == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+
+                {% endfor %}
+
+            </select>
+
+        </form>
+
+        <span class="fac-filter-dept"><i class="bi bi-building"></i> {{ department.name }}</span>
+
+    </div>
+
+
+
+    {% if papers %}
+
+    <div class="fac-panel">
+
+        <div class="fac-panel-header"><i class="bi bi-files"></i> All Papers</div>
+
+        <div class="fac-panel-body">
+
+            <div class="table-responsive">
+
+                <table class="fac-table">
+
+                    <thead>
+
+                        <tr>
+
+                            <th>Subject</th>
+
+                            <th>Phase</th>
+
+                            <th>Title</th>
+
+                            <th>Uploaded</th>
+
+                            <th>Action</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                    {% for p in papers %}
+
+                    <tr>
+
+                        <td class="fw-semibold">{{ p.subject.name }}</td>
+
+                        <td><span class="fac-duty-batch">Phase {{ p.phase }}</span></td>
+
+                        <td>{{ p.display_title }}</td>
+
+                        <td>{{ p.created_at|date:"d M Y" }}</td>
+
+                        <td class="text-nowrap">
+
+                            <a href="{% url 'portal:faculty_paper_view' p.pk %}" class="btn btn-primary-custom me-1">
+
+                                <i class="bi bi-eye"></i> View
+
+                            </a>
+
+                            <a href="{% url 'portal:faculty_paper_file' p.pk %}?download=1" class="btn btn-outline-secondary">
+
+                                <i class="bi bi-download"></i>
+
+                            </a>
+
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    {% else %}
+
+    <div class="fac-panel">
+
+        <div class="fac-empty">
+
+            <i class="bi bi-file-earmark-x"></i>
+
+            <p>No question papers uploaded yet.</p>
+
+        </div>
+
+    </div>
+
+    {% endif %}
+
+
+
+</div>
+
+{% endblock %}
+

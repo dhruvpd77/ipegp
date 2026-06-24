@@ -1,0 +1,138 @@
+{% extends 'portal/base.html' %}
+
+{% load static %}
+
+{% block title %}Syllabus{% endblock %}
+
+{% block extra_css %}
+
+<link rel="stylesheet" href="{% static 'css/faculty-portal.css' %}?v=3">
+
+{% endblock %}
+
+{% block content %}
+
+
+
+<div class="fac-page">
+
+
+
+    <section class="fac-hero">
+
+        <div class="fac-hero-inner">
+
+            <div class="fac-hero-left">
+
+                <div class="fac-hero-icon"><i class="bi bi-journal-text"></i></div>
+
+                <div class="fac-hero-text">
+
+                    <div class="fac-hero-label">Faculty Portal</div>
+
+                    <h1 class="fac-hero-title">Syllabus</h1>
+
+                    <p class="fac-hero-sub">Subject-wise syllabus documents · {{ department.name }}</p>
+
+                </div>
+
+            </div>
+
+            <div class="fac-hero-tag">{{ syllabi|length }} Document{{ syllabi|length|pluralize }}</div>
+
+        </div>
+
+    </section>
+
+
+
+    <div class="fac-filter">
+
+        <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
+
+            <label for="subject-filter">Subject</label>
+
+            <select id="subject-filter" name="subject" class="form-select" onchange="this.form.submit()">
+
+                <option value="">All Subjects</option>
+
+                {% for s in subjects %}
+
+                <option value="{{ s.pk }}" {% if subject_filter == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+
+                {% endfor %}
+
+            </select>
+
+        </form>
+
+        <span class="fac-filter-dept"><i class="bi bi-building"></i> {{ department.name }}</span>
+
+    </div>
+
+
+
+    <div class="fac-doc-grid">
+
+    {% for item in syllabi %}
+
+        <div class="fac-doc-card">
+
+            <div class="fac-doc-icon"><i class="bi bi-journal-text"></i></div>
+
+            <div class="fac-doc-title">{{ item.subject.name }}</div>
+
+            <div class="fac-doc-sub">{{ item.display_title }}</div>
+
+            <div class="fac-doc-meta">
+
+                <i class="bi bi-file-earmark"></i> {{ item.file_ext }}
+
+                · {{ item.created_at|date:"d M Y" }}
+
+                {% if not item.department %}· All Departments{% endif %}
+
+            </div>
+
+            <div class="fac-doc-actions">
+
+                <a href="{% url 'portal:faculty_syllabus_view' item.pk %}" class="btn btn-primary-custom flex-grow-1">
+
+                    <i class="bi bi-eye"></i> View
+
+                </a>
+
+                <a href="{% url 'portal:faculty_syllabus_file' item.pk %}?download=1" class="btn btn-outline-secondary">
+
+                    <i class="bi bi-download"></i>
+
+                </a>
+
+            </div>
+
+        </div>
+
+    {% empty %}
+
+        <div class="fac-panel" style="grid-column: 1 / -1;">
+
+            <div class="fac-empty">
+
+                <i class="bi bi-journal-x"></i>
+
+                <p>No syllabus uploaded yet for your department.</p>
+
+            </div>
+
+        </div>
+
+    {% endfor %}
+
+    </div>
+
+
+
+</div>
+
+{% endblock %}
+

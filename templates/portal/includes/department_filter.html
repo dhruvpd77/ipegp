@@ -1,0 +1,15 @@
+{% if show_dept_filter %}
+<form method="get" class="d-flex align-items-center gap-2">
+    <label>Department:</label>
+    <select name="department" class="form-select form-select-sm" style="width:auto;min-width:180px;" onchange="this.form.submit()">
+        <option value="all" {% if not department %}selected{% endif %}>All Departments</option>
+        {% for d in departments %}
+        <option value="{{ d.pk }}" {% if department and department.pk == d.pk %}selected{% endif %}>{{ d.name }}{% if is_super %} ({{ d.semester.name }}){% endif %}</option>
+        {% endfor %}
+    </select>
+    {% if batch_filter %}<input type="hidden" name="batch" value="{{ batch_filter }}">{% endif %}
+    {% if selected_subject %}<input type="hidden" name="subject" value="{{ selected_subject }}">{% endif %}
+    {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+    {% if search %}<input type="hidden" name="q" value="{{ search }}">{% endif %}
+</form>
+{% endif %}

@@ -1,0 +1,102 @@
+{% extends 'portal/base.html' %}
+{% block title %}Subjects{% endblock %}
+{% block content %}
+
+{% if semester %}
+{% include 'portal/includes/section_header.html' with icon='book' title='Subjects' subtitle=semester.name %}
+{% else %}
+{% include 'portal/includes/section_header.html' with icon='book' title='Subjects' subtitle='Manage IPE/GP subjects' %}
+{% endif %}
+
+{% if is_super and semesters %}
+<div class="filter-bar mb-4">
+    <form method="get" class="d-flex align-items-center gap-2">
+        <label class="fw-semibold">Semester:</label>
+        <select name="semester" class="form-select form-select-sm" style="width:auto;min-width:200px;" onchange="this.form.submit()">
+            <option value="">All Semesters</option>
+            {% for s in semesters %}
+            <option value="{{ s.pk }}" {% if semester and semester.pk == s.pk %}selected{% endif %}>{{ s.name }} ({{ s.academic_year }})</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-plus-circle"></i> Add Subject</div>
+            <div class="portal-card-body">
+                {% if is_super and not semester %}
+                <div class="alert alert-warning small mb-0">
+                    Select a semester from the dropdown above, or <a href="{% url 'portal:semester_list' %}">create a semester</a> first.
+                </div>
+                {% else %}
+                <form method="post" action="{% url 'portal:subject_list' %}">
+                    {% csrf_token %}
+                    {% if is_super and semester %}
+                    <input type="hidden" name="semester_id" value="{{ semester.pk }}">
+                    {% endif %}
+                    <div class="mb-3">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        {{ form.name }}
+                        {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
+                    </div>
+                    <div class="mb-3"><label class="form-label">Code</label>{{ form.code }}</div>
+                    <div class="mb-3">
+                        <label class="form-label">Type <span class="text-danger">*</span></label>
+                        {{ form.subject_type }}
+                    </div>
+                    <div class="mb-3"><label class="form-label">Max Marks (IPE)</label>{{ form.max_marks_ipe }}</div>
+                    <div class="mb-3"><label class="form-label">Max Marks (GP)</label>{{ form.max_marks_gp }}</div>
+                    {% if semester %}
+                    <div class="alert alert-light border small py-2 mb-3">
+                        Semester: <strong>{{ semester.name }}</strong> (all departments)
+                    </div>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary-custom w-100">Add Subject</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-list-ul"></i> Subject List</div>
+            <div class="portal-card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-custom table-hover mb-0">
+                        <thead><tr><th>Name</th><th>Code</th><th>Type</th><th>Scope</th><th>IPE Max</th><th>GP Max</th><th>Actions</th></tr></thead>
+                        <tbody>
+                        {% for s in subjects %}
+                        <tr>
+                            <td class="fw-semibold">{{ s.name }}</td>
+                            <td>{{ s.code|default:"—" }}</td>
+                            <td>
+                                {% if s.subject_type == 'PRACTICAL' %}
+                                <span class="badge bg-secondary">Practical</span>
+                                {% else %}
+                                <span class="badge bg-dark">Theory</span>
+                                {% endif %}
+                            </td>
+                            <td>{% if s.department %}{{ s.department.name }}{% else %}<span class="badge bg-info">All Depts</span>{% endif %}</td>
+                            <td>{{ s.max_marks_ipe }}</td>
+                            <td>{{ s.max_marks_gp }}</td>
+                            <td class="text-nowrap">
+                                <a href="{% url 'portal:subject_edit' s.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                                <form method="post" action="{% url 'portal:subject_delete' s.pk %}" class="d-inline" onsubmit="return confirm('Delete subject?')">
+                                    {% csrf_token %}<button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-4">No subjects added yet.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

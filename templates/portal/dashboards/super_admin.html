@@ -1,0 +1,85 @@
+{% extends 'portal/base.html' %}
+{% load static %}
+{% block title %}Super Admin Dashboard{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='speedometer2' title='Super Admin Dashboard' subtitle='Manage semesters, departments, students, faculty and IPE/GP' %}
+
+{% include 'portal/includes/dashboard_contact.html' %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="dash-stat-card">
+            <div class="dash-stat-icon blue"><i class="bi bi-calendar3"></i></div>
+            <div><div class="dash-stat-num">{{ semesters.count }}</div><div class="dash-stat-label">Semesters</div></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="dash-stat-card">
+            <div class="dash-stat-icon green"><i class="bi bi-building"></i></div>
+            <div><div class="dash-stat-num">{{ total_departments }}</div><div class="dash-stat-label">Departments</div></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="dash-stat-card">
+            <div class="dash-stat-icon orange"><i class="bi bi-people"></i></div>
+            <div><div class="dash-stat-num">{{ total_students }}</div><div class="dash-stat-label">Students</div></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="dash-stat-card">
+            <div class="dash-stat-icon blue"><i class="bi bi-person-badge"></i></div>
+            <div><div class="dash-stat-num">{{ total_faculty }}</div><div class="dash-stat-label">Faculty</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <a href="{% url 'portal:semester_list' %}" class="dash-action-btn justify-content-center py-3">
+            <i class="bi bi-calendar3"></i> Manage Semesters
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="{% url 'portal:student_list' %}" class="dash-action-btn justify-content-center py-3">
+            <i class="bi bi-people"></i> Manage Students
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="{% url 'portal:faculty_list' %}" class="dash-action-btn justify-content-center py-3">
+            <i class="bi bi-person-badge"></i> Manage Faculty
+        </a>
+    </div>
+</div>
+
+<div class="portal-card">
+    <div class="portal-card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-calendar3"></i> Semesters</span>
+        <a href="{% url 'portal:semester_list' %}" class="btn btn-sm btn-outline-light">View All</a>
+    </div>
+    <div class="portal-card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-custom table-hover mb-0">
+                <thead><tr><th>Name</th><th>Year</th><th>Status</th><th>Departments</th><th>Actions</th></tr></thead>
+                <tbody>
+                {% for sem in semesters %}
+                <tr>
+                    <td class="fw-semibold">{{ sem.name }}</td>
+                    <td>{{ sem.academic_year }}</td>
+                    <td><span class="badge {% if sem.is_active %}bg-success{% else %}bg-secondary{% endif %}">{{ sem.is_active|yesno:"Active,Inactive" }}</span></td>
+                    <td>{{ sem.departments.count }}</td>
+                    <td class="text-nowrap">
+                        {% include 'portal/includes/semester_status_toggle.html' with sem=sem %}
+                        <a href="{% url 'portal:create_semester_admin' sem.pk %}" class="btn btn-sm btn-outline-primary">+ Admin</a>
+                        <a href="{% url 'portal:semester_edit' sem.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted py-4">No semesters yet. <a href="{% url 'portal:semester_list' %}">Create one</a></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

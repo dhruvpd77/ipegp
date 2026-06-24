@@ -1,0 +1,26 @@
+{% extends 'portal/base.html' %}
+{% block title %}Edit Semester{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='pencil-square' title='Edit Semester' subtitle=semester.name %}
+
+<div class="row justify-content-center">
+    <div class="col-lg-5">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-calendar3"></i> Semester Details</div>
+            <div class="portal-card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3"><label class="form-label">Name</label>{{ form.name }}</div>
+                    <div class="mb-3"><label class="form-label">Academic Year</label>{{ form.academic_year }}</div>
+                    <div class="mb-3 form-check">{{ form.is_active }} <label class="form-check-label">Active</label></div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary-custom">Save Changes</button>
+                        <a href="{% url 'portal:semester_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

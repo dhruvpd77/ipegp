@@ -1,0 +1,51 @@
+{% extends 'portal/base.html' %}
+{% load static %}
+{% block title %}Login{% endblock %}
+{% block public_content %}
+<div class="login-page-bg">
+    <div class="login-page-center">
+        <div class="login-split-card" style="max-width:420px;">
+            <div class="login-split-right w-100">
+                <div class="text-center mb-4">
+                    <img src="{% static 'images/ljiet-logo.png' %}" alt="LJIET" class="login-brand-logo mb-3">
+                    <h3 class="login-signin-title">
+                        {% if role == 'faculty' %}Faculty Login
+                        {% elif role == 'student' %}Student Login
+                        {% else %}Admin Login{% endif %}
+                    </h3>
+                    <p class="login-signin-sub">IPE/GP Management Portal</p>
+                </div>
+
+                {% if messages %}
+                {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} py-2 small">{{ message }}</div>
+                {% endfor %}
+                {% endif %}
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            {% if role == 'student' %}Enrollment Number{% else %}Username{% endif %}
+                        </label>
+                        {{ form.username }}
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Password</label>
+                        {{ form.password }}
+                    </div>
+                    <button type="submit" class="btn btn-login w-100 py-2">
+                        <i class="bi bi-box-arrow-in-right"></i> Sign In
+                    </button>
+                </form>
+
+                <div class="text-center mt-4">
+                    <a href="{% url 'portal:home' %}" class="login-footer-note text-decoration-none">
+                        <i class="bi bi-arrow-left"></i> Back to Home
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

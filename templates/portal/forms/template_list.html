@@ -1,0 +1,48 @@
+{% extends 'portal/base.html' %}
+{% block title %}Form Templates{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='file-earmark-text' title='Form Templates' subtitle='GP/IPE form templates for student data collection' %}
+
+<div class="page-actions">
+    <a href="{% url 'portal:project_case_list' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-list-check"></i> Manage Cases
+    </a>
+    <a href="{% url 'portal:form_template_create' %}" class="btn btn-sm btn-primary-custom">
+        <i class="bi bi-plus"></i> Create from Excel
+    </a>
+</div>
+
+<div class="portal-card">
+    <div class="portal-card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-table"></i> Template List</span>
+        <span class="badge bg-primary">{{ templates.count }}</span>
+    </div>
+    <div class="portal-card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-custom table-hover mb-0">
+                <thead><tr><th>Name</th><th>Type</th><th>Fields</th><th>Scope</th><th>Created</th><th>Actions</th></tr></thead>
+                <tbody>
+                {% for t in templates %}
+                <tr>
+                    <td class="fw-semibold">{{ t.name }}</td>
+                    <td><span class="badge {% if t.exam_type == 'IPE' %}badge-ipe{% else %}badge-gp{% endif %}">{{ t.exam_type }}</span></td>
+                    <td>{{ t.fields.count }} field{{ t.fields.count|pluralize }}</td>
+                    <td>{% if t.department %}{{ t.department.name }}{% else %}<span class="badge bg-info">Semester-wide</span>{% endif %}</td>
+                    <td>{{ t.created_at|date:"d M Y" }}</td>
+                    <td class="text-nowrap">
+                        <a href="{% url 'portal:form_template_fields' t.pk %}" class="btn btn-sm btn-outline-primary" title="Manage dynamic fields"><i class="bi bi-ui-checks"></i> Fields</a>
+                        <form method="post" action="{% url 'portal:form_template_delete' t.pk %}" class="d-inline" onsubmit="return confirm('Delete template?')">
+                            {% csrf_token %}<button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center text-muted py-4">No templates yet. <a href="{% url 'portal:form_template_create' %}">Create from Excel</a></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

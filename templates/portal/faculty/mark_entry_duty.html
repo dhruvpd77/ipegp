@@ -1,0 +1,206 @@
+{% extends 'portal/base.html' %}
+{% load static %}
+{% block title %}{% if read_only %}View Marksheet{% else %}Mark Entry{% endif %} — {{ duty.subject.name }} {{ duty.batch }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/marksheet-entry.css' %}?v=2">
+{% endblock %}
+{% block content %}
+<div class="me-page">
+
+{% include 'portal/includes/section_header.html' with icon=read_only|yesno:'eye,pencil-square' title=duty.subject.name subtitle=duty.batch %}
+
+<div class="me-meta">
+    <span class="badge {% if duty.exam_type == 'IPE' %}badge-ipe{% else %}badge-gp{% endif %}">{{ duty.exam_type }}</span>
+    <span class="me-pill"><i class="bi bi-calendar3"></i> {{ duty.duty_date|date:"d M Y" }}</span>
+    <span class="me-pill"><i class="bi bi-building"></i> {{ duty.department.name }}</span>
+    {% if viewing_faculty %}
+    <span class="me-pill"><i class="bi bi-person-badge"></i> {{ viewing_faculty.name }}</span>
+    {% endif %}
+    {% if marks_status == 'completed' %}
+    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Completed</span>
+    {% else %}
+    <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Pending</span>
+    {% endif %}
+    {% if duty.marks_locked %}
+    <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Verified &amp; Locked</span>
+    {% endif %}
+    {% if duty.marks_saved_at %}
+    <span class="me-pill" title="Last saved"><i class="bi bi-clock"></i> Saved {{ duty.marks_saved_at|date:"d M Y, h:i A" }}</span>
+    {% endif %}
+    {% if duty.marks_locked_at %}
+    <span class="me-pill" title="Verified and locked"><i class="bi bi-lock"></i> Locked {{ duty.marks_locked_at|date:"d M Y, h:i A" }}</span>
+    {% endif %}
+    {% if read_only %}
+    <span class="text-muted">{% if duty.marks_locked %}Marks are locked — view only.{% else %}Read-only view of marks entered by internal faculty.{% endif %}</span>
+    {% else %}
+    <span class="text-muted">Enter deductions as <strong>−2</strong>, <strong>−1</strong> · Total = sum (+) of all mark columns · <strong>AB</strong> for absent.{% if is_admin_entry %} {% if duty.marks_locked %}Semester/Super admin can edit locked marks.{% else %}Admin can view and edit marks.{% endif %}{% endif %}</span>
+    {% endif %}
+</div>
+
+{% if not template %}
+<div class="alert alert-warning">No marksheet template uploaded for this subject. Contact admin.</div>
+{% else %}
+
+<div class="me-legend">
+    <span><i style="background:#f8fafc"></i> Final Chit</span>
+    <span><i style="background:#f1f5f9"></i> Aim Change</span>
+    <span><i style="background:#e2e8f0"></i> Late Coming</span>
+    <span><i style="background:#f8fafc"></i> Program Marks</span>
+    <span><i style="background:#e5e7eb"></i> Total</span>
+</div>
+
+<div class="portal-card">
+    <div class="portal-card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-table"></i> Marksheet — Batch {{ duty.batch }}</span>
+        <span class="small opacity-75">{{ student_rows|length }} students</span>
+    </div>
+    <div class="portal-card-body p-0">
+        {% if read_only %}<div>{% else %}<form method="post">{% csrf_token %}{% endif %}
+            <div class="me-scroll">
+                <table class="me-table">
+                    <colgroup>
+                        <col style="width:42px">
+                        <col style="width:46px">
+                        <col style="width:200px">
+                        <col style="width:128px">
+                        {% for block in column_layout %}
+                        {% if block.kind == 'single' %}
+                        {% if block.col.type == 'final_chit' or block.col.type == 'deduction_aim' or block.col.type == 'deduction_late' %}
+                        <col style="width:62px">
+                        {% elif block.col.type == 'remarks' %}
+                        <col style="width:110px">
+                        {% else %}
+                        <col style="width:72px">
+                        {% endif %}
+                        {% else %}
+                        {% for c in block.cols %}
+                        <col style="width:78px">
+                        {% endfor %}
+                        {% endif %}
+                        {% endfor %}
+                        <col style="width:58px">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th rowspan="2" class="me-sticky me-sticky-1">#</th>
+                            <th rowspan="2" class="me-sticky me-sticky-2">Roll</th>
+                            <th rowspan="2" class="me-sticky me-sticky-3 text-start ps-2">Name</th>
+                            <th rowspan="2">Enrollment</th>
+                            {% for block in column_layout %}
+                            {% if block.kind == 'single' %}
+                            {% if block.col.type == 'final_chit' %}
+                            <th rowspan="2" class="me-h-chit">Final Chit</th>
+                            {% elif block.col.type == 'deduction_aim' %}
+                            <th rowspan="2" class="me-h-aim me-h-sum">Aim Change<span class="me-th-op">+</span><span class="me-th-sub">(−2)</span></th>
+                            {% elif block.col.type == 'deduction_late' %}
+                            <th rowspan="2" class="me-h-late me-h-sum">Late<span class="me-th-op">+</span><span class="me-th-sub">(−1)</span></th>
+                            {% elif block.col.type == 'remarks' %}
+                            <th rowspan="2">Remarks</th>
+                            {% else %}
+                            <th rowspan="2">{{ block.header.short }}</th>
+                            {% endif %}
+                            {% else %}
+                            <th colspan="{{ block.cols|length }}" class="me-h-group">{{ block.title }}</th>
+                            {% endif %}
+                            {% endfor %}
+                            <th rowspan="2" class="me-sticky-end">Total</th>
+                        </tr>
+                        {% if has_mark_groups %}
+                        <tr class="me-subhead">
+                            {% for block in column_layout %}
+                            {% if block.kind == 'group' %}
+                            {% for h in block.headers %}
+                            <th class="me-h-mark me-h-sum">{{ h.short }}<span class="me-th-op">+</span></th>
+                            {% endfor %}
+                            {% endif %}
+                            {% endfor %}
+                        </tr>
+                        {% endif %}
+                    </thead>
+                    <tbody>
+                    {% for row in student_rows %}
+                    <tr data-student="{{ row.student.pk }}">
+                        <td class="me-sticky me-sticky-1 me-sr">{{ forloop.counter }}</td>
+                        <td class="me-sticky me-sticky-2 me-roll">{{ row.student.roll_no }}</td>
+                        <td class="me-sticky me-sticky-3 me-name" title="{{ row.student.name }}">{{ row.student.name }}</td>
+                        <td class="me-enroll" title="{{ row.student.enrollment_no }}">{{ row.student.enrollment_no }}</td>
+                        {% for cell in row.cells %}
+                        {% if cell.col.type == 'remarks' %}
+                        <td>
+                            <input type="text" name="remarks_{{ row.student.pk }}" class="me-input me-input-remarks" value="{{ cell.value }}" placeholder="Optional"{% if read_only %} readonly{% endif %}>
+                        </td>
+                        {% elif cell.col.type == 'deduction_aim' %}
+                        <td class="me-fill-aim">
+                            <input type="text" name="{{ cell.col.field_name }}_{{ row.student.pk }}" class="me-input me-input-narrow mark-input" data-col-type="deduction_aim" value="{{ cell.value }}" placeholder="−2"{% if read_only %} readonly{% endif %}>
+                        </td>
+                        {% elif cell.col.type == 'deduction_late' %}
+                        <td class="me-fill-late">
+                            <input type="text" name="{{ cell.col.field_name }}_{{ row.student.pk }}" class="me-input me-input-narrow mark-input" data-col-type="deduction_late" value="{{ cell.value }}" placeholder="−1"{% if read_only %} readonly{% endif %}>
+                        </td>
+                        {% elif cell.col.type == 'final_chit' %}
+                        <td class="me-fill-chit">
+                            <input type="text" name="{{ cell.col.field_name }}_{{ row.student.pk }}" class="me-input me-input-narrow" data-col-type="final_chit" value="{{ cell.value }}"{% if read_only %} readonly{% endif %}>
+                        </td>
+                        {% else %}
+                        <td class="me-fill-mark">
+                            <input type="text" name="{{ cell.col.field_name }}_{{ row.student.pk }}" class="me-input mark-input" data-col-type="mark" value="{{ cell.value }}"
+                                   {% if cell.col.max_marks %}placeholder="/ {{ cell.col.max_marks }}"{% endif %}{% if read_only %} readonly{% endif %}>
+                        </td>
+                        {% endif %}
+                        {% endfor %}
+                        <td class="me-sticky-end me-fill-total me-total total-cell">{% if row.total and row.total != '0' %}{{ row.total }}{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="20" class="text-center text-muted py-5">No students in this batch.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if student_rows %}
+            <div class="me-actions px-3 pb-3">
+                {% if not read_only %}
+                <button type="submit" name="action" value="save" class="btn btn-primary-custom"><i class="bi bi-save"></i> Save Marks</button>
+                {% if not is_admin_entry and not duty.marks_locked %}
+                <button type="submit" name="action" value="verify_lock" class="btn btn-success"
+                        onclick="return confirm('Verify and lock marks? After this you cannot edit them. Only semester admin or super admin can make changes.');">
+                    <i class="bi bi-lock"></i> Verify and Lock
+                </button>
+                {% endif %}
+                {% endif %}
+                <a href="{% if back_url %}{{ back_url }}{% else %}{% url 'portal:mark_entry_list' %}{% endif %}" class="btn btn-outline-secondary">{% if read_only %}Back{% else %}Back to Duties{% endif %}</a>
+                <span class="me-count"><i class="bi bi-people"></i> {{ student_rows|length }} students · sorted by roll no.</span>
+            </div>
+            {% endif %}
+        {% if read_only %}</div>{% else %}</form>{% endif %}
+    </div>
+</div>
+{% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    function parseNum(v) {
+        if (!v || String(v).trim().toUpperCase() === 'AB') return null;
+        var n = parseFloat(v);
+        return isNaN(n) ? null : n;
+    }
+    document.querySelectorAll('tbody tr[data-student]').forEach(function(row) {
+        function updateTotal() {
+            var sum = 0, has = false;
+            row.querySelectorAll('.mark-input').forEach(function(inp) {
+                var n = parseNum(inp.value);
+                if (n !== null) { sum += n; has = true; }
+            });
+            var cell = row.querySelector('.total-cell');
+            if (cell) cell.textContent = has ? sum : '';
+        }
+        row.querySelectorAll('.mark-input').forEach(function(inp) {
+            if (!inp.readOnly) inp.addEventListener('input', updateTotal);
+        });
+        updateTotal();
+    });
+})();
+</script>
+{% endblock %}

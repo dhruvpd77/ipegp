@@ -1,0 +1,37 @@
+{% extends 'portal/base.html' %}
+{% block title %}Select Form Template{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='file-earmark-text' title='Select GP Form' subtitle=group.name %}
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="portal-card mb-3">
+            <div class="portal-card-body">
+                <div class="small text-muted">Project Title</div>
+                <div class="fw-bold">{{ group.name }}</div>
+                <div class="small text-muted mt-2">Subject: {% if group.subject %}{{ group.subject.name }}{% else %}—{% endif %}</div>
+            </div>
+        </div>
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-list-ul"></i> Available Forms</div>
+            <div class="portal-card-body">
+                {% for t in templates %}
+                <a href="{% url 'portal:gp_submit' group.pk %}?template={{ t.pk }}" class="dash-action-btn mb-2 text-decoration-none">
+                    <i class="bi bi-file-earmark-text"></i>
+                    <div>
+                        <div class="fw-semibold">{{ t.name }}</div>
+                        <small class="text-muted">{{ t.fields.count }} field{{ t.fields.count|pluralize }}</small>
+                    </div>
+                </a>
+                {% empty %}
+                <p class="text-muted mb-0">No form templates available. Your project details are already saved.</p>
+                {% endfor %}
+                <a href="{% url 'portal:gp_project' %}" class="btn btn-outline-secondary w-100 mt-3">
+                    <i class="bi bi-arrow-left"></i> Back to GP Project
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends 'portal/base.html' %}
+{% block title %}Manage Semesters{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='calendar3' title='Manage Semesters' subtitle='Create and manage academic semesters' %}
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-plus-circle"></i> Create Semester</div>
+            <div class="portal-card-body">
+                <form method="post" action="{% url 'portal:semester_create' %}">
+                    {% csrf_token %}
+                    <div class="mb-3"><label class="form-label">Name</label>{{ form.name }}</div>
+                    <div class="mb-3"><label class="form-label">Academic Year</label>{{ form.academic_year }}</div>
+                    <div class="mb-3 form-check">{{ form.is_active }} <label class="form-check-label">Active</label></div>
+                    <button type="submit" class="btn btn-primary-custom w-100">Create Semester</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-table"></i> Semester List</div>
+            <div class="portal-card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-custom table-hover mb-0">
+                        <thead><tr><th>Name</th><th>Year</th><th>Status</th><th>Admins</th><th>Actions</th></tr></thead>
+                        <tbody>
+                        {% for sem in semesters %}
+                        <tr>
+                            <td class="fw-semibold">{{ sem.name }}</td>
+                            <td>{{ sem.academic_year }}</td>
+                            <td><span class="badge {% if sem.is_active %}bg-success{% else %}bg-secondary{% endif %}">{{ sem.is_active|yesno:"Active,Inactive" }}</span></td>
+                            <td>{{ sem.admins.count }}</td>
+                            <td class="text-nowrap">
+                                {% include 'portal/includes/semester_status_toggle.html' with sem=sem %}
+                                <a href="{% url 'portal:create_semester_admin' sem.pk %}" class="btn btn-sm btn-outline-primary">+ Admin</a>
+                                <a href="{% url 'portal:semester_edit' sem.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                                <form method="post" action="{% url 'portal:semester_delete' sem.pk %}" class="d-inline" onsubmit="return confirm('Delete this semester?')">
+                                    {% csrf_token %}
+                                    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted py-4">No semesters yet.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

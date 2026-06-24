@@ -1,0 +1,39 @@
+{% extends 'portal/base.html' %}
+{% block title %}Submit GP Form{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='send' title=template.name subtitle=group.name %}
+
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="portal-card mb-3">
+            <div class="portal-card-body">
+                <div class="row g-2 small">
+                    <div class="col-md-6"><span class="text-muted">Project Title:</span> <strong>{{ group.name }}</strong></div>
+                    <div class="col-md-6"><span class="text-muted">Subject:</span> <strong>{% if group.subject %}{{ group.subject.name }}{% else %}—{% endif %}</strong></div>
+                </div>
+            </div>
+        </div>
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-pencil-square"></i> Fill Form Details</div>
+            <div class="portal-card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="template_id" value="{{ template.pk }}">
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">{{ field.label }}{% if field.field.required %} *{% endif %}</label>
+                        {{ field }}
+                        {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary-custom"><i class="bi bi-send"></i> Submit Form</button>
+                        <a href="{% url 'portal:gp_project' %}" class="btn btn-outline-secondary">Back to GP Project</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

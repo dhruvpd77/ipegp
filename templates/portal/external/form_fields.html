@@ -1,0 +1,109 @@
+{% extends 'portal/base.html' %}
+{% load static %}
+{% block title %}Manage Form Fields{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/external-form.css' %}">
+{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='ui-checks' title='Manage Form Fields' subtitle=reg_form.title %}
+
+<div class="page-actions flex-wrap">
+    <a href="{% url 'portal:external_form_manage_list' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back</a>
+    <span class="badge bg-secondary">{{ reg_form.semester.name }}</span>
+    <form method="post" class="d-inline">
+        {% csrf_token %}
+        <input type="hidden" name="form_type" value="toggle_active">
+        <button type="submit" class="btn btn-sm ext-toggle-btn {% if reg_form.is_active %}btn-success{% else %}btn-outline-secondary{% endif %}">
+            <i class="bi bi-toggle-{% if reg_form.is_active %}on{% else %}off{% endif %}"></i>
+            {% if reg_form.is_active %}Active{% else %}Inactive{% endif %}
+        </button>
+    </form>
+    <a href="{% url 'portal:become_external_form' reg_form.pk %}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i> Preview Form</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="portal-card form-panel mb-3">
+            <div class="portal-card-header"><i class="bi bi-plus-circle"></i> Add Field</div>
+            <div class="portal-card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="add_field">
+                    <div class="mb-2"><label class="form-label">Field Label *</label>{{ field_form.field_label }}</div>
+                    <div class="mb-2"><label class="form-label">Type *</label>{{ field_form.field_type }}</div>
+                    <div class="mb-2"><label class="form-label">Dropdown Options</label>{{ field_form.choices }}<div class="form-text">Comma-separated for Dropdown</div></div>
+                    <div class="mb-2"><label class="form-label">Help Text</label>{{ field_form.help_text }}</div>
+                    <div class="mb-2 form-check">{{ field_form.is_required }} <label class="form-check-label">Required</label></div>
+                    <div class="mb-3"><label class="form-label">Order</label>{{ field_form.order }}</div>
+                    <button type="submit" class="btn btn-primary-custom w-100">Add Field</button>
+                </form>
+            </div>
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="seed_defaults">
+            <button type="submit" class="btn btn-outline-accent w-100 btn-sm"><i class="bi bi-magic"></i> Load Default Fields</button>
+        </form>
+    </div>
+    <div class="col-lg-8">
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-list-check"></i> Form Fields ({{ form_fields.count }})</div>
+            <div class="portal-card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-custom table-sm mb-0">
+                        <thead>
+                            <tr><th>Order</th><th>Label</th><th>Type</th><th>Required</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody>
+                        {% for f in form_fields %}
+                        <tr>
+                            <td>{{ f.order }}</td>
+                            <td>{{ f.field_label }}</td>
+                            <td><span class="badge bg-secondary">{{ f.get_field_type_display }}</span></td>
+                            <td>{% if f.is_required %}Yes{% else %}No{% endif %}</td>
+                            <td class="text-nowrap">
+                                <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#edit-{{ f.pk }}"><i class="bi bi-pencil"></i></button>
+                                <form method="post" class="d-inline" onsubmit="return confirm('Remove field?')">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="form_type" value="delete_field">
+                                    <input type="hidden" name="field_id" value="{{ f.pk }}">
+                                    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        <tr class="collapse" id="edit-{{ f.pk }}">
+                            <td colspan="5" class="bg-light">
+                                <form method="post" class="p-2">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="form_type" value="edit_field">
+                                    <input type="hidden" name="field_id" value="{{ f.pk }}">
+                                    <div class="row g-2">
+                                        <div class="col-md-4"><label class="form-label small">Label</label><input name="field_label" class="form-control form-control-sm" value="{{ f.field_label }}"></div>
+                                        <div class="col-md-3"><label class="form-label small">Type</label>
+                                            <select name="field_type" class="form-select form-select-sm">
+                                                {% for val, lbl in field_form.field_type.field.choices %}
+                                                <option value="{{ val }}" {% if f.field_type == val %}selected{% endif %}>{{ lbl }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2"><label class="form-label small">Order</label><input name="order" type="number" class="form-control form-control-sm" value="{{ f.order }}"></div>
+                                        <div class="col-md-3"><label class="form-label small">Choices</label><input name="choices" class="form-control form-control-sm" value="{{ f.choices }}"></div>
+                                        <div class="col-md-6"><label class="form-label small">Help Text</label><input name="help_text" class="form-control form-control-sm" value="{{ f.help_text }}"></div>
+                                        <div class="col-md-3 d-flex align-items-end"><div class="form-check"><input type="checkbox" name="is_required" class="form-check-input" {% if f.is_required %}checked{% endif %}><label class="form-check-label small">Required</label></div></div>
+                                        <div class="col-md-3 d-flex align-items-end"><button type="submit" class="btn btn-sm btn-primary-custom w-100">Save</button></div>
+                                    </div>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted py-3">No fields. Click "Load Default Fields" to add standard fields.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends 'portal/base.html' %}
+{% block title %}Project Cases{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='list-check' title='GP Project Cases' subtitle='Cases students select when submitting GP projects' %}
+
+<div class="page-actions">
+    <a href="{% url 'portal:form_template_list' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Form Templates</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-plus-circle"></i> Add Case</div>
+            <div class="portal-card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="add_case">
+                    <div class="mb-3"><label class="form-label">Case Name *</label>{{ form.name }}</div>
+                    <div class="mb-3 form-check">{{ form.is_active }} <label class="form-check-label">Active</label></div>
+                    <button type="submit" class="btn btn-primary-custom w-100">Add Case</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-table"></i> Case List</div>
+            <div class="portal-card-body p-0">
+                <table class="table table-custom table-hover mb-0">
+                    <thead><tr><th>Case Name</th><th>Scope</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>
+                    {% for c in cases %}
+                    <tr>
+                        <td class="fw-semibold">{{ c.name }}</td>
+                        <td>{% if c.department %}{{ c.department.name }}{% else %}All Departments{% endif %}</td>
+                        <td><span class="badge {% if c.is_active %}bg-success{% else %}bg-secondary{% endif %}">{% if c.is_active %}Active{% else %}Inactive{% endif %}</span></td>
+                        <td>
+                            <form method="post" class="d-inline" onsubmit="return confirm('Delete case?')">
+                                {% csrf_token %}<input type="hidden" name="form_type" value="delete_case"><input type="hidden" name="case_id" value="{{ c.pk }}">
+                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="text-center text-muted py-4">No cases yet. Add cases for students to select.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends 'portal/base.html' %}
+{% block title %}Semester Inactive{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="portal-card">
+            <div class="portal-card-body text-center py-5 px-4">
+                <div class="rounded-circle bg-light d-inline-flex align-items-center justify-content-center mb-3"
+                     style="width:72px;height:72px;">
+                    <i class="bi bi-calendar-x fs-2 text-secondary"></i>
+                </div>
+                <h4 class="fw-bold mb-2">Semester Currently Inactive</h4>
+                <p class="text-muted mb-1">
+                    The academic semester <strong>{{ semester.name }}</strong> is not active right now.
+                </p>
+                <p class="text-muted mb-4">
+                    Portal data and features are hidden until your institute activates this semester.
+                    Please contact your department or semester administrator.
+                </p>
+                <div class="d-flex justify-content-center gap-2 flex-wrap">
+                    <a href="{% url 'portal:logout' %}" class="btn btn-primary-custom">
+                        <i class="bi bi-box-arrow-right"></i> Logout
+                    </a>
+                    <a href="{% url 'portal:change_password' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-key"></i> Change Password
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

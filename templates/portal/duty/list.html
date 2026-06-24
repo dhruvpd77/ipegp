@@ -1,0 +1,191 @@
+{% extends 'portal/base.html' %}
+{% block title %}Faculty Duty Assignment{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='person-check' title='Faculty Duty Assignment' subtitle='Upload IPE schedule Excel or assign duties manually — internal & external examiners' %}
+
+{% if show_dept_filter %}
+<div class="filter-bar mb-4 flex-wrap">
+    {% include 'portal/includes/department_filter.html' %}
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="portal-card form-panel mb-4">
+            <div class="portal-card-header"><i class="bi bi-file-earmark-spreadsheet"></i> Upload Duty Schedule (Excel)</div>
+            <div class="portal-card-body">
+                {% if not department %}
+                <div class="alert alert-warning mb-0">Select a department to upload the duty schedule.</div>
+                {% else %}
+                <p class="small text-muted mb-3">
+                    Upload the official IPE schedule Excel (e.g. <strong>FSD-2 / PYTHON-II</strong> format with
+                    <strong>DIV, TIME, Internal, External, Room</strong> columns). Duties are created per batch for
+                    both internal and external faculty. If external matches an existing faculty code/name, the same login is used.
+                </p>
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="upload_schedule">
+                    <input type="hidden" name="department_id" value="{{ department.pk }}">
+                    <div class="mb-3">
+                        <label class="form-label">Schedule Excel File</label>
+                        {{ upload_form.schedule_file }}
+                    </div>
+                    <div class="mb-3 form-check">
+                        {{ upload_form.replace_existing }}
+                        <label class="form-check-label" for="{{ upload_form.replace_existing.id_for_label }}">
+                            Replace previous Excel-imported duties
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-accent w-100"><i class="bi bi-upload"></i> Import Schedule</button>
+                </form>
+
+                {% if last_import_summary %}
+                <hr>
+                <h6 class="fw-semibold small mb-2">Last Import Summary</h6>
+                <ul class="small mb-0 text-muted">
+                    <li>{{ last_import_summary.created }} created, {{ last_import_summary.updated }} updated</li>
+                    {% if last_import_summary.external_created %}<li>{{ last_import_summary.external_created }} new external examiner(s)</li>{% endif %}
+                    {% if last_import_summary.external_matched %}<li>{{ last_import_summary.external_matched }} external matched to existing faculty</li>{% endif %}
+                    {% if last_import_summary.warnings %}
+                    <li class="text-warning">{{ last_import_summary.warnings|length }} warning(s):
+                        <ul class="mb-0">{% for w in last_import_summary.warnings|slice:":5" %}<li>{{ w }}</li>{% endfor %}</ul>
+                    </li>
+                    {% endif %}
+                </ul>
+                {% endif %}
+
+                {% if external_without_login %}
+                <hr>
+                <h6 class="fw-semibold small mb-2">External Examiners — No Login Yet</h6>
+                <ul class="small mb-2">
+                {% for f in external_without_login %}
+                    <li>{{ f.name }} <span class="text-muted">({{ f.mentor_code }})</span></li>
+                {% endfor %}
+                </ul>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="generate_external_credentials">
+                    <input type="hidden" name="department_id" value="{{ department.pk }}">
+                    <button type="submit" class="btn btn-sm btn-primary-custom"><i class="bi bi-key"></i> Generate Logins</button>
+                    <button type="submit" name="download" value="1" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download"></i> Generate & Download</button>
+                </form>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-plus-circle"></i> Manual Duty Assignment</div>
+            <div class="portal-card-body">
+                {% if not department %}
+                <div class="alert alert-warning mb-0">Select a department first.</div>
+                {% else %}
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="assign_duty">
+                    <div class="mb-3">
+                        <label class="form-label">Exam Type</label>
+                        {{ duty_form.exam_type }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Subject</label>
+                        {{ duty_form.subject }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Faculty</label>
+                        {{ duty_form.faculty }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Role</label>
+                        {{ duty_form.duty_role }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Batch</label>
+                        {{ duty_form.batch }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Duty Date</label>
+                        {{ duty_form.duty_date }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Time Slot</label>
+                        {{ duty_form.time_slot }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Room No</label>
+                        {{ duty_form.room_no }}
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100"><i class="bi bi-check-lg"></i> Assign Duty</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-list-check"></i> Assigned Duties</div>
+            <div class="portal-card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-custom table-hover mb-0 table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Subject</th>
+                                <th>Batch</th>
+                                <th>Internal Faculty</th>
+                                <th>External Faculty</th>
+                                <th>Time</th>
+                                <th>Room</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for row in duty_rows %}
+                        <tr>
+                            <td class="text-nowrap">{{ row.duty_date|date:"d M Y" }}</td>
+                            <td>
+                                <span class="badge {% if row.exam_type == 'IPE' %}badge-ipe{% else %}badge-gp{% endif %} me-1">{{ row.exam_type }}</span>
+                                {{ row.subject.name }}
+                            </td>
+                            <td><span class="badge bg-primary">{{ row.batch }}</span></td>
+                            <td class="small">
+                                {% if row.internal %}
+                                <div class="d-flex align-items-center justify-content-between gap-1">
+                                    <span class="fw-semibold">{{ row.internal.faculty.name }}</span>
+                                    <form method="post" action="{% url 'portal:faculty_duty_delete' row.internal.pk %}" class="d-inline" onsubmit="return confirm('Remove internal faculty from this duty?')">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1" title="Remove internal"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                </div>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="small">
+                                {% if row.external %}
+                                <div class="d-flex align-items-center justify-content-between gap-1">
+                                    <span class="fw-semibold">{{ row.external.faculty.name }}</span>
+                                    <form method="post" action="{% url 'portal:faculty_duty_delete' row.external.pk %}" class="d-inline" onsubmit="return confirm('Remove external faculty from this duty?')">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1" title="Remove external"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                </div>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="small text-muted">{{ row.time_slot|default:"—" }}</td>
+                            <td class="small">{{ row.room_no|default:"—" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-4">No duties assigned yet. Upload schedule Excel or assign manually.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

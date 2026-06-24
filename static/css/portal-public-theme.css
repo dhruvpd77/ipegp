@@ -1,0 +1,209 @@
+/* Shared public pages — slate navy + blue/teal accents */
+:root {
+    --pub-dark: #0f172a;
+    --pub-dark-2: #1e293b;
+    --pub-accent: #3b82f6;
+    --pub-accent-light: #93c5fd;
+    --pub-accent-dark: #1d4ed8;
+    --pub-teal: #0d9488;
+    --pub-gold: #64748b;
+    --pub-gold-light: #94a3b8;
+    --pub-gold-dark: #475569;
+    --pub-text: #1e293b;
+    --pub-muted: #64748b;
+    --pub-border: #e2e8f0;
+    --pub-white: #ffffff;
+    --pub-gradient: linear-gradient(135deg, #0f172a 0%, #1e3a5f 55%, #1e293b 100%);
+    --pub-header-gradient: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+}
+
+/* Dark background with subtle blue grid + glow */
+.pub-page-bg {
+    min-height: 100vh;
+    background-color: var(--pub-dark);
+    background-image:
+        radial-gradient(ellipse 70% 55% at 90% 85%, rgba(59, 130, 246, 0.12) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 40% at 8% 15%, rgba(13, 148, 136, 0.08) 0%, transparent 50%),
+        linear-gradient(rgba(59, 130, 246, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59, 130, 246, 0.04) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+    color: var(--pub-text);
+    font-family: 'Inter', system-ui, sans-serif;
+    position: relative;
+}
+
+.pub-topbar {
+    padding: 0.75rem 2rem;
+    background: rgba(15, 23, 42, 0.85);
+    border-bottom: 2px solid rgba(59, 130, 246, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    z-index: 2;
+}
+.pub-topbar-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #fff;
+    letter-spacing: 0.02em;
+}
+.pub-topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.pub-topbar-brand img {
+    height: 34px;
+    object-fit: contain;
+}
+.pub-btn-outline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.9rem;
+    border-radius: 0.35rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #fff;
+    border: 1px solid rgba(147, 197, 253, 0.35);
+    background: transparent;
+    text-decoration: none;
+    transition: background 0.15s, border-color 0.15s;
+}
+.pub-btn-outline:hover {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: var(--pub-accent);
+    color: #fff;
+}
+
+/* Logo boxes — white panels */
+.pub-logo-box {
+    background: #fff;
+    border-radius: 0.5rem;
+    padding: 0.65rem 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.25);
+}
+.pub-logo-box img {
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+}
+.pub-logo-box.lg { padding: 0.85rem 1.25rem; }
+
+/* Pill badges */
+.pub-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    margin: 0.2rem;
+}
+.pub-badge-dark {
+    background: rgba(59, 130, 246, 0.15);
+    color: #bfdbfe;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+.pub-badge-gold {
+    background: rgba(13, 148, 136, 0.15);
+    color: #99f6e4;
+    border: 1px solid rgba(13, 148, 136, 0.3);
+}
+
+/* White corporate card */
+.pub-white-card {
+    background: var(--pub-white);
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(59, 130, 246, 0.08);
+    overflow: hidden;
+}
+
+.pub-card-header {
+    background: var(--pub-header-gradient);
+    color: #fff;
+    padding: 1.15rem 1.5rem;
+    border-bottom: 3px solid var(--pub-accent);
+}
+.pub-card-header h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0;
+}
+.pub-card-header p {
+    margin: 0.25rem 0 0;
+    font-size: 0.82rem;
+    opacity: 0.85;
+}
+
+.pub-field label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 0.35rem;
+}
+.pub-field .form-control,
+.pub-field .form-select,
+.ext-input {
+    border: 1px solid var(--pub-border);
+    border-radius: 0.4rem;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.9rem;
+    width: 100%;
+}
+.pub-field .form-control:focus,
+.pub-field .form-select:focus,
+.ext-input:focus {
+    border-color: var(--pub-accent);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    outline: none;
+}
+
+.pub-btn-gold {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: none;
+    border-radius: 0.4rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #fff;
+    background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+    transition: filter 0.15s, box-shadow 0.15s;
+    cursor: pointer;
+}
+.pub-btn-gold:hover {
+    background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%);
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
+    color: #fff;
+}
+
+.pub-section-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    margin: 1.5rem 0 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+.pub-section-title i {
+    color: #2563eb;
+    margin-right: 0.25rem;
+}
+
+.pub-link-gold {
+    color: #2563eb;
+    font-size: 0.82rem;
+    font-weight: 500;
+    text-decoration: none;
+}
+.pub-link-gold:hover {
+    color: #1d4ed8;
+    text-decoration: underline;
+}

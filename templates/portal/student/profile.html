@@ -1,0 +1,80 @@
+{% extends 'portal/base.html' %}
+{% block title %}My Profile{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='person-circle' title='My Profile' subtitle=student.enrollment_no %}
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="portal-card text-center">
+            <div class="portal-card-body py-4">
+                <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center fw-bold mb-3"
+                     style="width:72px;height:72px;font-size:1.75rem;">
+                    {{ student.name|first|upper }}
+                </div>
+                <h4 class="fw-bold mb-1">{{ student.name }}</h4>
+                <p class="text-muted small mb-2">{{ student.enrollment_no }}</p>
+                <span class="badge bg-primary">{{ student.batch }}</span>
+                <span class="badge bg-secondary ms-1">{{ student.branch }}</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-card-list"></i> Student Details</div>
+            <div class="portal-card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="profile-field-card">
+                            <div class="label">Roll No</div>
+                            <div class="value">{{ student.roll_no }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="profile-field-card">
+                            <div class="label">Enrollment No</div>
+                            <div class="value">{{ student.enrollment_no }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="profile-field-card">
+                            <div class="label">Branch</div>
+                            <div class="value">{{ student.branch }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="profile-field-card">
+                            <div class="label">Batch</div>
+                            <div class="value"><span class="badge bg-primary">{{ student.batch }}</span></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="profile-field-card">
+                            <div class="label">Mentor</div>
+                            <div class="value">{{ student.mentor|default:"—" }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="profile-field-card">
+                            <div class="label">Department</div>
+                            <div class="value">{{ student.department.name }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="profile-field-card">
+                            <div class="label">Student Phone</div>
+                            <div class="value">{% if student.student_phone %}{{ student.student_phone|cut:".0" }}{% else %}—{% endif %}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="profile-field-card">
+                            <div class="label">Parent Contact</div>
+                            <div class="value">{% if student.parent_contact %}{{ student.parent_contact|cut:".0" }}{% else %}—{% endif %}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

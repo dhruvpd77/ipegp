@@ -1,0 +1,86 @@
+/* Academic Management hub — professional card grid */
+.um-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+}
+
+@media (max-width: 767px) {
+    .um-grid { grid-template-columns: 1fr; }
+}
+
+@media (min-width: 992px) {
+    .um-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.um-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.35rem 1.5rem;
+    background: #fff;
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 0.75rem;
+    text-decoration: none;
+    color: inherit;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+    min-height: 120px;
+}
+
+.um-card:hover {
+    border-color: #93c5fd;
+    box-shadow: 0 8px 22px rgba(37, 99, 235, 0.1);
+    transform: translateY(-2px);
+    color: inherit;
+}
+
+.um-card-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 0.65rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    flex-shrink: 0;
+}
+
+.um-card:nth-child(6n+1) .um-card-icon { background: #dbeafe; color: #2563eb; border: 1px solid #bfdbfe; }
+.um-card:nth-child(6n+2) .um-card-icon { background: #ccfbf1; color: #0d9488; border: 1px solid #99f6e4; }
+.um-card:nth-child(6n+3) .um-card-icon { background: #e0e7ff; color: #4f46e5; border: 1px solid #c7d2fe; }
+.um-card:nth-child(6n+4) .um-card-icon { background: #fce7f3; color: #db2777; border: 1px solid #fbcfe8; }
+.um-card:nth-child(6n+5) .um-card-icon { background: #ffedd5; color: #ea580c; border: 1px solid #fed7aa; }
+.um-card:nth-child(6n+6) .um-card-icon { background: #f3e8ff; color: #7c3aed; border: 1px solid #e9d5ff; }
+
+.um-card-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.um-card-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 0.35rem;
+    letter-spacing: -0.01em;
+}
+
+.um-card-desc {
+    font-size: 0.875rem;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.um-card-arrow {
+    color: #94a3b8;
+    font-size: 1.1rem;
+    margin-top: 0.25rem;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+
+.um-card:hover .um-card-arrow {
+    color: #2563eb;
+}

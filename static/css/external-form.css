@@ -1,0 +1,211 @@
+/* External Examiner — slate navy + blue/teal accents */
+
+.ext-page {
+    --ext-accent: var(--pub-accent);
+}
+
+.ext-public-bg {
+    min-height: 100vh;
+    background-color: var(--pub-dark);
+    background-image:
+        radial-gradient(ellipse 70% 55% at 90% 85%, rgba(59, 130, 246, 0.12) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 40% at 8% 15%, rgba(13, 148, 136, 0.08) 0%, transparent 50%),
+        linear-gradient(rgba(59, 130, 246, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59, 130, 246, 0.04) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+    padding-bottom: 2.5rem;
+}
+
+.ext-public-topbar {
+    padding: 0.75rem 2rem;
+    background: rgba(15, 23, 42, 0.85);
+    border-bottom: 2px solid rgba(59, 130, 246, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.ext-hero {
+    text-align: center;
+    color: #fff;
+    padding: 2rem 1.5rem 1.5rem;
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+.ext-hero h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: #fff;
+}
+
+.ext-hero h1 i {
+    color: #3b82f6;
+}
+
+.ext-hero p {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.88rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.ext-form-card {
+    max-width: 780px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 1rem;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+}
+
+.ext-form-card-header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+    color: #fff;
+    padding: 1.15rem 1.5rem;
+    border-bottom: 3px solid #3b82f6;
+}
+
+.ext-form-card-header h2 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.ext-form-card-body {
+    padding: 1.5rem 1.75rem 2rem;
+}
+
+.ext-field-group {
+    margin-bottom: 1rem;
+}
+
+.ext-field-group label {
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: #334155;
+    margin-bottom: 0.35rem;
+    display: block;
+}
+
+.ext-field-group .form-text {
+    font-size: 0.76rem;
+    color: var(--pub-muted);
+}
+
+.ext-field-group .text-danger {
+    font-size: 0.76rem;
+}
+
+.ext-field-group .ext-input,
+.ext-field-group input,
+.ext-field-group select,
+.ext-field-group textarea {
+    border: 1px solid var(--pub-border);
+    border-radius: 0.4rem;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.9rem;
+    width: 100%;
+}
+
+.ext-field-group input:focus,
+.ext-field-group select:focus,
+.ext-field-group textarea:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    outline: none;
+}
+
+.ext-section-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    margin: 1.5rem 0 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.ext-section-title i {
+    color: #2563eb;
+}
+
+.ext-submit-btn {
+    background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    padding: 0.8rem 2rem;
+    border-radius: 0.4rem;
+    font-size: 0.95rem;
+    width: 100%;
+    margin-top: 0.75rem;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+    transition: background 0.15s, box-shadow 0.15s;
+}
+
+.ext-submit-btn:hover {
+    background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%);
+    color: #fff;
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
+}
+
+.ext-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+}
+
+.ext-picker-card {
+    background: #fff;
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    text-decoration: none;
+    color: #1e293b;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    border: 1px solid #e2e8f0;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ext-picker-card:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 12px 40px rgba(37, 99, 235, 0.15);
+    color: #1e293b;
+}
+
+.ext-picker-card .sem-badge {
+    background: linear-gradient(135deg, #1d4ed8, #2563eb);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+}
+
+/* Admin pages (logged in) */
+.ext-status-active { color: #374151; font-weight: 600; }
+.ext-status-inactive { color: #dc2626; font-weight: 600; }
+
+.ext-toggle-btn {
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.82rem;
+    padding: 0.35rem 1rem;
+}
+
+.ext-photo-preview {
+    max-width: 120px;
+    max-height: 120px;
+    border-radius: 0.4rem;
+    border: 1px solid var(--pub-border);
+    object-fit: cover;
+}

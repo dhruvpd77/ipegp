@@ -1,0 +1,76 @@
+{% extends 'portal/base.html' %}
+{% load static %}
+{% block title %}Sign In{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/login.css' %}?v=11">
+{% endblock %}
+{% block public_content %}
+<div class="login-page">
+    <header class="login-page-topbar">
+        <img src="{% static 'images/lju-logo.png' %}" alt="LJ University" class="login-page-topbar-logo">
+        <span class="login-page-topbar-divider"></span>
+        <span>IPE/GP Portal</span>
+    </header>
+
+    <main class="login-page-main">
+        {% if messages %}
+        <div class="login-page-alerts">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show border-0 shadow-sm mb-2">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="login-card">
+            <!-- Left: branding -->
+            <div class="login-card-brand">
+                <div class="login-card-brand-logos">
+                    <img src="{% static 'images/lju-logo.png' %}" alt="LJ University" class="login-lju-logo">
+                    <img src="{% static 'images/ljiet-logo-sif.png' %}" alt="LJIET" class="login-crest">
+                </div>
+                <div class="login-card-brand-bottom">
+                    <h1>IPE/GP Portal</h1>
+                    <p>Secure access for students, faculty, and administrators to manage Internal Practical Examination and Group Project workflows.</p>
+                </div>
+            </div>
+
+            <!-- Right: form -->
+            <div class="login-card-form">
+                <h2>Sign In</h2>
+                <p class="login-card-form-sub">Enter your assigned username and password to continue.</p>
+
+                <form method="post" class="login-form">
+                    {% csrf_token %}
+                    <div class="login-form-field">
+                        <label for="{{ form.username.id_for_label }}">Username</label>
+                        {{ form.username }}
+                        {% if form.username.errors %}<div class="login-form-error">{{ form.username.errors }}</div>{% endif %}
+                    </div>
+                    <div class="login-form-field">
+                        <label for="{{ form.password.id_for_label }}">Password</label>
+                        {{ form.password }}
+                        {% if form.password.errors %}<div class="login-form-error">{{ form.password.errors }}</div>{% endif %}
+                    </div>
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger py-2 small">{{ form.non_field_errors }}</div>
+                    {% endif %}
+                    <button type="submit" class="login-btn-submit">
+                        <i class="bi bi-box-arrow-in-right"></i> Sign In
+                    </button>
+                </form>
+
+                <p class="login-form-note">Use the username and password given by your institute.</p>
+                <a href="{% url 'portal:change_password' %}" class="login-link-pw">
+                    <i class="bi bi-key"></i> Change Password
+                </a>
+                <a href="{% url 'portal:become_external' %}" class="login-link-ext">
+                    External Examiner Registration
+                </a>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

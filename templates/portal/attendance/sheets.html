@@ -1,0 +1,130 @@
+{% extends 'portal/base.html' %}
+{% block title %}Attendance Sheets{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='file-earmark-spreadsheet' title='Attendance Sheets' subtitle='Upload IPE/GP templates and download batch-wise attendance sheets' %}
+
+{% if show_dept_filter %}
+<div class="filter-bar mb-4">
+    {% include 'portal/includes/department_filter.html' %}
+    {% if not department %}
+    <span class="text-muted small ms-auto">Select a department to upload templates or download sheets.</span>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <!-- Upload Template -->
+    <div class="col-lg-5">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-upload"></i> Upload Attendance Template</div>
+            <div class="portal-card-body">
+                <p class="small text-muted mb-3">Upload separate Excel templates for <strong>IPE</strong> and <strong>GP</strong>. Use the standard LJIET attendance sheet format.</p>
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="upload_template">
+                    {% if department %}<input type="hidden" name="department_id" value="{{ department.pk }}">{% endif %}
+                    <div class="mb-3"><label class="form-label">Template Name</label>{{ upload_form.name }}</div>
+                    <div class="mb-3"><label class="form-label">Exam Type</label>{{ upload_form.exam_type }}</div>
+                    <div class="mb-3"><label class="form-label">Excel File</label>{{ upload_form.template_file }}</div>
+                    <button type="submit" class="btn btn-primary-custom w-100"><i class="bi bi-upload"></i> Upload Template</button>
+                </form>
+
+                <hr>
+                <h6 class="fw-semibold mb-2">Uploaded Templates</h6>
+                {% for t in templates %}
+                <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2 small">
+                    <div>
+                        <span class="badge {% if t.exam_type == 'IPE' %}badge-ipe{% else %}badge-gp{% endif %}">{{ t.exam_type }}</span>
+                        {{ t.name }}
+                    </div>
+                    <form method="post" action="{% url 'portal:attendance_template_delete' t.pk %}" onsubmit="return confirm('Delete template?')">
+                        {% csrf_token %}
+                        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                    </form>
+                </div>
+                {% empty %}
+                <p class="text-muted small">No custom templates. Default template will be used.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Download Sheet -->
+    <div class="col-lg-7">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-download"></i> Download Attendance Sheet</div>
+            <div class="portal-card-body">
+                {% if not department %}
+                <div class="alert alert-warning">Select a department first.</div>
+                {% else %}
+                <div class="small text-muted mb-3">
+                    <p class="mb-2"><strong>IPE:</strong> One sheet per batch (A1, A2, A3…) with all students listed.</p>
+                    <p class="mb-0"><strong>GP:</strong> Uses submitted GP groups. Up to <strong>6 groups per sheet</strong> (e.g. A3(1 TO 6) GP, A3(7 TO 12) GP). Group ID, Div, roll, enrollment and sign columns match the official template. Extra form template fields appear as dynamic columns.</p>
+                </div>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="download_sheet">
+                    <input type="hidden" name="department_id" value="{{ department.pk }}">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Exam Type</label>
+                            {{ download_form.exam_type }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Subject</label>
+                            {{ download_form.subject }}
+                        </div>
+                        <div class="col-md-6" id="gp-batch-field">
+                            <label class="form-label">Batch <span class="text-muted fw-normal">(GP only)</span></label>
+                            {{ download_form.batch }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Semester Label</label>
+                            {{ download_form.semester_label }}
+                            <div class="form-text">e.g. III-2025 SY-1</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Department Label</label>
+                            {{ download_form.department_label }}
+                            <div class="form-text">e.g. SY- CE\IT- 1</div>
+                        </div>
+                    </div>
+                    <div class="mt-3 p-3 bg-light rounded small">
+                        <strong>Preview header:</strong><br>
+                        Semester - <span id="preview-sem">{{ download_form.semester_label.value|default:"..." }}</span>
+                        &nbsp;&nbsp;<span id="preview-dept">{{ download_form.department_label.value|default:"..." }}</span> Department
+                    </div>
+                    <button type="submit" class="btn btn-accent w-100 mt-3 py-2" id="download-btn">
+                        <i class="bi bi-file-earmark-excel"></i> Download Attendance Sheets
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+    const examType = document.getElementById('id_exam_type');
+    const batchField = document.getElementById('gp-batch-field');
+    const downloadBtn = document.getElementById('download-btn');
+    function syncGpUi() {
+        if (!examType) return;
+        const isGp = examType.value === 'GP';
+        if (batchField) batchField.style.display = isGp ? '' : 'none';
+        if (downloadBtn) {
+            downloadBtn.innerHTML = isGp
+                ? '<i class="bi bi-file-earmark-excel"></i> Download GP Attendance Sheets'
+                : '<i class="bi bi-file-earmark-excel"></i> Download IPE Attendance Sheets';
+        }
+    }
+    if (examType) {
+        examType.addEventListener('change', syncGpUi);
+        syncGpUi();
+    }
+})();
+</script>
+{% endblock %}

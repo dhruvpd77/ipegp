@@ -1,0 +1,276 @@
+/* Faculty mark entry — corporate marksheet grid */
+.me-page .me-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 1rem;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    margin-bottom: 1rem;
+    font-size: 0.82rem;
+}
+
+.me-page .me-meta .me-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+    font-weight: 500;
+}
+
+.me-page .me-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.me-page .me-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.me-page .me-legend i {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    border: 1px solid rgba(0,0,0,0.08);
+}
+
+.me-scroll {
+    overflow: auto;
+    max-height: calc(100vh - 280px);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: #fff;
+}
+
+.me-table {
+    table-layout: fixed;
+    width: max-content;
+    min-width: 100%;
+    margin: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.8rem;
+}
+
+.me-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-align: center;
+    vertical-align: middle;
+    padding: 0.45rem 0.35rem;
+    border-bottom: 3px solid #3b82f6;
+    border-right: 1px solid rgba(255,255,255,0.12);
+    line-height: 1.25;
+    white-space: normal;
+}
+
+.me-table thead tr.me-subhead th {
+    top: 2.45rem;
+    background: #243044;
+    font-size: 0.68rem;
+    font-weight: 500;
+    padding: 0.35rem 0.3rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.me-table thead th .me-th-sub {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 400;
+    opacity: 0.75;
+    margin-top: 1px;
+}
+
+.me-table thead th .me-th-op {
+    display: inline-block;
+    margin-left: 3px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #cbd5e1;
+    opacity: 1;
+}
+
+.me-table thead th.me-h-sum .me-th-op {
+    vertical-align: super;
+    font-size: 0.6rem;
+}
+
+.me-table tbody td {
+    padding: 0.35rem 0.4rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #e8edf3;
+    border-right: 1px solid #eef2f6;
+    background: #fff;
+}
+
+.me-table tbody tr:nth-child(even) td {
+    background: #fafbfc;
+}
+
+.me-table tbody tr:hover td {
+    background: #f0f7ff;
+}
+
+.me-table tbody tr:hover td.me-sticky {
+    background: #e8f2fc;
+}
+
+/* Sticky identity columns */
+.me-table .me-sticky {
+    position: sticky;
+    z-index: 2;
+    background: #fff;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.04);
+}
+
+.me-table thead .me-sticky {
+    z-index: 6;
+    background: #1a2332;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.15);
+}
+
+.me-table thead tr.me-subhead .me-sticky {
+    background: #243044;
+}
+
+.me-table .me-sticky-1 { left: 0; }
+.me-table .me-sticky-2 { left: 42px; }
+.me-table .me-sticky-3 { left: 88px; }
+
+.me-table .me-sticky-end {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background: #f1f5f9;
+    box-shadow: -2px 0 4px rgba(0,0,0,0.06);
+    font-weight: 700;
+    text-align: center;
+}
+
+.me-table thead .me-sticky-end {
+    z-index: 6;
+    background: #1f2937;
+    color: #fff;
+}
+
+/* Column type fills — neutral slate tones */
+.me-fill-chit { background: #f8fafc !important; }
+.me-fill-aim { background: #f1f5f9 !important; }
+.me-fill-late { background: #e2e8f0 !important; }
+.me-fill-mark { background: #f8fafc !important; }
+.me-fill-total { background: #e5e7eb !important; }
+
+.me-table thead .me-h-chit { background: #374151; }
+.me-table thead .me-h-aim { background: #4b5563; }
+.me-table thead .me-h-late { background: #6b7280; }
+.me-table thead .me-h-mark { background: #4b5563; }
+.me-table thead .me-h-group { background: #334155; }
+
+/* Cell content */
+.me-table .me-roll {
+    text-align: center;
+    font-weight: 600;
+    color: #1a2332;
+    font-variant-numeric: tabular-nums;
+}
+
+.me-table .me-name {
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+.me-table .me-enroll {
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.me-table .me-sr {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.72rem;
+}
+
+.me-table .me-total {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #1f2937;
+    min-height: 1.5rem;
+}
+
+/* Inputs */
+.me-table .me-input {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 0.3rem 0.25rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-align: center;
+    color: #1e293b;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.me-table .me-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.me-table .me-input::placeholder {
+    color: #cbd5e1;
+    font-size: 0.7rem;
+    font-weight: 400;
+}
+
+.me-table .me-input-remarks {
+    text-align: left;
+    font-size: 0.75rem;
+}
+
+.me-table .me-input-narrow {
+    max-width: 52px;
+}
+
+.me-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    margin-top: 1rem;
+}
+
+.me-actions .me-count {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}

@@ -1,0 +1,41 @@
+{% extends 'portal/base.html' %}
+{% load static %}
+{% block title %}Submission Detail{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/external-form.css' %}">
+{% endblock %}
+{% block content %}
+
+<div class="page-actions">
+    <a href="{% url 'portal:external_submission_list' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Responses</a>
+</div>
+
+<div class="portal-card">
+    <div class="portal-card-header">
+        <i class="bi bi-person-badge"></i>
+        {{ submission.field_data.examiner_name_bank|default:"External Examiner" }}
+        <span class="badge bg-light text-dark ms-2">{{ submission.form.semester.name }}</span>
+    </div>
+    <div class="portal-card-body">
+        <p class="text-muted small mb-4">
+            Submitted {{ submission.submitted_at|date:"d M Y, H:i" }} · Form: {{ submission.form.title }}
+        </p>
+        <div class="row g-3">
+            {% for row in field_rows %}
+            <div class="col-md-6">
+                <div class="profile-field-card">
+                    <div class="label">{{ row.field.field_label }}</div>
+                    <div class="value">
+                        {% if row.is_photo and row.value != '—' %}
+                        <img src="/media/{{ row.value }}" alt="Photograph" class="ext-photo-preview mt-1">
+                        {% else %}
+                        {{ row.value }}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

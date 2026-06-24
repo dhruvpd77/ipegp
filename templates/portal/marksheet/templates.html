@@ -1,0 +1,126 @@
+{% extends 'portal/base.html' %}
+{% block title %}Marksheet Templates{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='file-earmark-bar-graph' title='Marksheet Templates' subtitle='Upload subject-wise IPE/GP marksheet templates and download batch-wise marksheets' %}
+
+{% if show_dept_filter %}
+<div class="filter-bar mb-4 flex-wrap">
+    {% include 'portal/includes/department_filter.html' %}
+    <form method="get" class="d-flex align-items-center gap-2">
+        {% if department %}<input type="hidden" name="department" value="{{ department.pk }}">{% endif %}
+        <label class="fw-semibold small">Show:</label>
+        <select name="exam_type" class="form-select form-select-sm" style="min-width:120px;" onchange="this.form.submit()">
+            <option value="">All Types</option>
+            <option value="IPE" {% if filter_exam == 'IPE' %}selected{% endif %}>IPE</option>
+            <option value="GP" {% if filter_exam == 'GP' %}selected{% endif %}>GP</option>
+        </select>
+    </form>
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-upload"></i> Upload Marksheet Template</div>
+            <div class="portal-card-body">
+                <p class="small text-muted mb-3">
+                    Select <strong>IPE</strong> or <strong>GP</strong>, choose the <strong>subject</strong>, then upload the Excel marksheet layout for that subject
+                    (e.g. PYTHON-II, FSD-2). Semester admin uploads apply to <strong>all departments</strong>.
+                </p>
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="upload_template">
+                    {% if department %}<input type="hidden" name="department_id" value="{{ department.pk }}">{% endif %}
+                    <div class="mb-3">
+                        <label class="form-label">Exam Type</label>
+                        {{ upload_form.exam_type }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Subject</label>
+                        {{ upload_form.subject }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Template Name</label>
+                        {{ upload_form.name }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Excel File</label>
+                        {{ upload_form.template_file }}
+                        <div class="form-text">Use official LJIET marksheet format (one batch sheet as reference).</div>
+                    </div>
+                    <div class="mb-3 form-check">
+                        {{ upload_form.replace_existing }}
+                        <label class="form-check-label" for="{{ upload_form.replace_existing.id_for_label }}">Replace existing template for this subject</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100"><i class="bi bi-upload"></i> Upload Template</button>
+                </form>
+
+                <hr>
+                <h6 class="fw-semibold mb-2">Uploaded Templates</h6>
+                {% for t in templates %}
+                <div class="d-flex justify-content-between align-items-start border rounded p-2 mb-2 small">
+                    <div>
+                        <span class="badge {% if t.exam_type == 'IPE' %}badge-ipe{% else %}badge-gp{% endif %}">{{ t.exam_type }}</span>
+                        <strong>{{ t.subject.name }}</strong> — {{ t.name }}<br>
+                        <span class="text-muted">
+                            {% if t.department %}{{ t.department.name }}{% else %}All departments{% endif %}
+                            · {{ t.created_at|date:"d M Y" }}
+                        </span>
+                    </div>
+                    <form method="post" action="{% url 'portal:marksheet_template_delete' t.pk %}" onsubmit="return confirm('Delete this marksheet template?')">
+                        {% csrf_token %}
+                        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                    </form>
+                </div>
+                {% empty %}
+                <p class="text-muted small mb-0">No marksheet templates uploaded yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-download"></i> Download Marksheet (All Batches)</div>
+            <div class="portal-card-body">
+                {% if not department %}
+                <div class="alert alert-warning">Select a department to download marksheets for its students.</div>
+                {% else %}
+                <p class="small text-muted mb-3">
+                    Select <strong>IPE</strong> or <strong>GP</strong> and the <strong>subject</strong>.
+                    Generates one Excel file with a sheet per batch (A1, A2, A3…).
+                    Student details and marks (if entered) are filled automatically from the uploaded template layout.
+                </p>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="download_marksheet">
+                    <input type="hidden" name="department_id" value="{{ department.pk }}">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Exam Type</label>
+                            {{ download_form.exam_type }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Subject</label>
+                            {{ download_form.subject }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Semester Label</label>
+                            {{ download_form.semester_label }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Department Label</label>
+                            {{ download_form.department_label }}
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-accent w-100 mt-3 py-2">
+                        <i class="bi bi-file-earmark-excel"></i> Download All Batch Marksheets
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+<div class="section-hero">
+    <div class="section-hero-icon">
+        <i class="bi bi-{{ icon }}"></i>
+    </div>
+    <div>
+        <h1>{{ title }}</h1>
+        {% if subtitle %}<p>{{ subtitle }}</p>{% endif %}
+    </div>
+    {% if actions %}
+    <div class="section-hero-actions ms-auto">{{ actions }}</div>
+    {% endif %}
+</div>

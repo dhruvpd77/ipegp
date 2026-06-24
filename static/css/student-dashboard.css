@@ -1,0 +1,347 @@
+/* Student Dashboard */
+.stu-dash {
+    --stu-navy: #0f172a;
+    --stu-slate: #475569;
+    --stu-muted: #64748b;
+    --stu-border: #e2e8f0;
+    --stu-bg: #f8fafc;
+    --stu-accent: #3b82f6;
+    font-size: 15px;
+}
+
+.stu-hero {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 55%, #1e293b 100%);
+    border-radius: 0.75rem;
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.75rem;
+    border-bottom: 3px solid #3b82f6;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.15);
+}
+
+.stu-hero-inner {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.stu-hero-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.stu-hero-text {
+    flex: 1;
+    min-width: 200px;
+    color: #fff;
+}
+
+.stu-hero-greeting {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 0.15rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.stu-hero-name {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin: 0 0 0.6rem;
+    line-height: 1.25;
+    color: #fff;
+}
+
+.stu-hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.5rem;
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.stu-hero-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.stu-hero-meta i {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.stu-hero-tag {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+    padding: 0.4rem 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.4rem;
+    background: rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+}
+
+/* ─── Section title ─── */
+.stu-section-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--stu-slate);
+    margin-bottom: 0.75rem;
+    letter-spacing: 0.02em;
+}
+
+/* ─── Info cards ─── */
+.stu-info-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.75rem;
+}
+
+@media (max-width: 991px) {
+    .stu-info-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 480px) {
+    .stu-info-grid { grid-template-columns: 1fr; }
+}
+
+.stu-info-card {
+    background: #fff;
+    border: 1px solid var(--stu-border);
+    border-radius: 0.5rem;
+    padding: 1rem 1.15rem;
+    box-shadow: 0 1px 3px rgba(26, 35, 50, 0.04);
+}
+
+.stu-info-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--stu-muted);
+    margin-bottom: 0.35rem;
+}
+
+.stu-info-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--stu-navy);
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.stu-info-value .stu-batch-badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--stu-navy);
+    background: var(--stu-bg);
+    border: 1px solid var(--stu-border);
+    border-radius: 0.3rem;
+}
+
+/* ─── Action cards ─── */
+.stu-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.75rem;
+}
+
+@media (max-width: 767px) {
+    .stu-actions-grid { grid-template-columns: 1fr; }
+}
+
+.stu-action-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    text-decoration: none;
+    color: inherit;
+    background: #fff;
+    border: 1px solid var(--stu-border);
+    border-radius: 0.5rem;
+    padding: 1.15rem 1.25rem;
+    box-shadow: 0 1px 3px rgba(26, 35, 50, 0.04);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.stu-action-card:hover {
+    border-color: #93c5fd;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
+    color: inherit;
+}
+
+.stu-action-card:nth-child(1) .stu-action-icon { background: #dbeafe; color: #2563eb; border-color: #bfdbfe; }
+.stu-action-card:nth-child(2) .stu-action-icon { background: #ccfbf1; color: #0d9488; border-color: #99f6e4; }
+.stu-action-card:nth-child(3) .stu-action-icon { background: #e0e7ff; color: #4f46e5; border-color: #c7d2fe; }
+.stu-action-card:nth-child(4) .stu-action-icon { background: #fce7f3; color: #db2777; border-color: #fbcfe8; }
+
+.stu-action-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 0.5rem;
+    background: var(--stu-bg);
+    border: 1px solid var(--stu-border);
+    color: var(--stu-slate);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.stu-action-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.stu-action-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--stu-navy);
+    margin-bottom: 0.15rem;
+}
+
+.stu-action-desc {
+    font-size: 0.8rem;
+    color: var(--stu-muted);
+    line-height: 1.4;
+    margin: 0;
+}
+
+.stu-action-arrow {
+    color: var(--stu-muted);
+    font-size: 1rem;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+
+.stu-action-card:hover .stu-action-arrow {
+    color: var(--stu-navy);
+}
+
+/* ─── Contact ─── */
+.stu-contact {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.15rem 1.25rem;
+    background: #fff;
+    border: 1px solid var(--stu-border);
+    border-left: 3px solid var(--stu-navy);
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(26, 35, 50, 0.04);
+}
+
+.stu-contact-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 0.5rem;
+    background: var(--stu-bg);
+    border: 1px solid var(--stu-border);
+    color: var(--stu-slate);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.stu-contact-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.stu-contact-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--stu-muted);
+    margin-bottom: 0.2rem;
+}
+
+.stu-contact-text {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--stu-navy);
+    margin-bottom: 0.4rem;
+}
+
+.stu-contact-email {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--stu-slate);
+    text-decoration: none;
+}
+
+.stu-contact-email:hover {
+    color: var(--stu-navy);
+    text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+    .stu-hero {
+        padding: 1.15rem 1.1rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .stu-hero-inner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.85rem;
+    }
+
+    .stu-hero-avatar {
+        width: 56px;
+        height: 56px;
+        font-size: 1.3rem;
+    }
+
+    .stu-hero-name {
+        font-size: 1.2rem;
+        word-break: break-word;
+    }
+
+    .stu-hero-meta {
+        flex-direction: column;
+        gap: 0.45rem;
+        font-size: 0.78rem;
+    }
+
+    .stu-hero-tag {
+        align-self: flex-start;
+    }
+
+    .stu-action-card {
+        padding: 1rem;
+    }
+
+    .stu-contact {
+        flex-direction: column;
+        padding: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .stu-dash { font-size: 14px; }
+    .stu-info-value { font-size: 0.88rem; }
+}

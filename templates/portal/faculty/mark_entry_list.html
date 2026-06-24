@@ -1,0 +1,137 @@
+{% extends 'portal/base.html' %}
+{% load static %}
+{% block title %}My Duties{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/faculty-portal.css' %}?v=3">
+{% endblock %}
+{% block content %}
+
+<div class="fac-page">
+
+    <section class="fac-hero">
+        <div class="fac-hero-inner">
+            <div class="fac-hero-left">
+                <div class="fac-hero-icon"><i class="bi bi-calendar-check"></i></div>
+                <div class="fac-hero-text">
+                    <div class="fac-hero-label">Faculty Portal</div>
+                    <h1 class="fac-hero-title">My Duties</h1>
+                    <p class="fac-hero-sub">{{ faculty.name }} · {{ faculty.department.name }}</p>
+                </div>
+            </div>
+            <div class="fac-hero-tag">{{ duties|length }} Assignment{{ duties|length|pluralize }}</div>
+        </div>
+    </section>
+
+    {% if faculty.is_external %}
+    <div class="fac-notice">
+        <i class="bi bi-info-circle"></i>
+        <div>You are logged in as an <strong>External Examiner</strong>. View your assigned duties below. Access <strong>Syllabus</strong> and <strong>Papers</strong> from the sidebar.</div>
+    </div>
+    {% endif %}
+
+    <div class="fac-section-title">Assigned Duties</div>
+
+    {% if duties %}
+    <div class="fac-duty-grid">
+        {% for d in duties %}
+        <div class="fac-duty-card">
+            <div class="fac-duty-head">
+                <h2 class="fac-duty-subject">{{ d.subject.name }}</h2>
+                <span class="fac-duty-type">{{ d.exam_type }}</span>
+            </div>
+            <div class="fac-duty-body">
+                <div class="fac-duty-date">
+                    <i class="bi bi-calendar3"></i> {{ d.duty_date|date:"l, d M Y" }}
+                </div>
+                <div class="fac-duty-meta">
+                    <div class="fac-duty-field">
+                        <div class="label">Batch</div>
+                        <div class="value"><span class="fac-duty-batch">{{ d.batch }}</span></div>
+                    </div>
+                    <div class="fac-duty-field">
+                        <div class="label">Role</div>
+                        <div class="value">
+                            {% if d.duty_role == 'INTERNAL' %}
+                            <span class="fac-role-badge internal">Internal</span>
+                            {% else %}
+                            <span class="fac-role-badge external">External</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="fac-duty-field">
+                        <div class="label">Time</div>
+                        <div class="value">{{ d.time_slot|default:"—" }}</div>
+                    </div>
+                    <div class="fac-duty-field">
+                        <div class="label">Room</div>
+                        <div class="value">{{ d.room_no|default:"—" }}</div>
+                    </div>
+                    <div class="fac-duty-field">
+                        <div class="label">Department</div>
+                        <div class="value">{{ d.department.name }}</div>
+                    </div>
+                </div>
+                {% if d.duty_role == 'INTERNAL' %}
+                <div class="fac-duty-action">
+                    <a href="{% url 'portal:mark_entry_duty' d.pk %}" class="btn btn-primary-custom">
+                        {% if d.marks_locked %}
+                        <i class="bi bi-eye"></i> View Marks
+                        {% else %}
+                        <i class="bi bi-pencil-square"></i> Enter Marks
+                        {% endif %}
+                    </a>
+                    {% if d.marks_locked %}
+                    <span class="fac-duty-lock-badge"><i class="bi bi-lock-fill"></i> Locked {{ d.marks_locked_at|date:"d M Y" }}</span>
+                    {% elif d.marks_saved_at %}
+                    <span class="fac-duty-lock-badge text-muted"><i class="bi bi-clock"></i> Saved {{ d.marks_saved_at|date:"d M Y" }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="fac-panel">
+        <div class="fac-empty">
+            <i class="bi bi-calendar-x"></i>
+            <p>No duties assigned yet. Contact your department admin.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not faculty.is_external and sessions %}
+    <div class="fac-section-title">Active Exam Sessions</div>
+    <div class="fac-panel">
+        <div class="fac-panel-header"><i class="bi bi-clipboard-check"></i> Legacy Exam Sessions</div>
+        <div class="fac-panel-body">
+            <div class="table-responsive">
+                <table class="fac-table">
+                    <thead>
+                        <tr>
+                            <th>Exam</th>
+                            <th>Type</th>
+                            <th>Subject</th>
+                            <th>Date</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for s in sessions %}
+                    <tr>
+                        <td class="fw-semibold">{{ s.name }}</td>
+                        <td><span class="fac-duty-type">{{ s.exam_type }}</span></td>
+                        <td>{{ s.subject.name }}</td>
+                        <td>{{ s.date|default:"—" }}</td>
+                        <td><a href="{% url 'portal:mark_entry' s.pk %}" class="btn btn-primary-custom">Enter Marks</a></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

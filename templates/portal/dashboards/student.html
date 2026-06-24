@@ -1,0 +1,166 @@
+{% extends 'portal/base.html' %}
+
+{% load static %}
+
+{% block title %}Student Dashboard{% endblock %}
+
+{% block extra_css %}
+
+<link rel="stylesheet" href="{% static 'css/student-dashboard.css' %}?v=5">
+
+{% endblock %}
+
+{% block content %}
+
+
+
+<div class="stu-dash">
+
+
+
+    <section class="stu-hero">
+
+        <div class="stu-hero-inner">
+
+            <div class="stu-hero-avatar">{{ student.name|first|upper }}</div>
+
+            <div class="stu-hero-text">
+
+                <div class="stu-hero-greeting">Welcome back</div>
+
+                <h1 class="stu-hero-name">{{ student.name }}</h1>
+
+                <div class="stu-hero-meta">
+
+                    <span><i class="bi bi-credit-card-2-front"></i> {{ student.enrollment_no }}</span>
+
+                    <span><i class="bi bi-collection"></i> Batch {{ student.batch }}</span>
+
+                    <span><i class="bi bi-diagram-3"></i> {{ student.branch }}</span>
+
+                    {% if student.department %}
+
+                    <span><i class="bi bi-building"></i> {{ student.department.name }}</span>
+
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+            <div class="stu-hero-tag">Student Portal</div>
+
+        </div>
+
+    </section>
+
+
+
+    <div class="stu-section-title">Your Details</div>
+
+    <div class="stu-info-grid">
+
+        <div class="stu-info-card">
+
+            <div class="stu-info-label">Enrollment No</div>
+
+            <div class="stu-info-value">{{ student.enrollment_no }}</div>
+
+        </div>
+
+        <div class="stu-info-card">
+
+            <div class="stu-info-label">Batch</div>
+
+            <div class="stu-info-value"><span class="stu-batch-badge">{{ student.batch }}</span></div>
+
+        </div>
+
+        <div class="stu-info-card">
+
+            <div class="stu-info-label">Branch</div>
+
+            <div class="stu-info-value">{{ student.branch|default:"—" }}</div>
+
+        </div>
+
+        <div class="stu-info-card">
+
+            <div class="stu-info-label">Mentor</div>
+
+            <div class="stu-info-value">{{ student.mentor|default:"—" }}</div>
+
+        </div>
+
+    </div>
+
+
+
+    <div class="stu-section-title">Quick Access</div>
+
+    <div class="stu-actions-grid">
+
+        <a href="{% url 'portal:student_profile' %}" class="stu-action-card">
+
+            <div class="stu-action-icon"><i class="bi bi-person-circle"></i></div>
+
+            <div class="stu-action-body">
+
+                <div class="stu-action-title">My Profile</div>
+
+                <p class="stu-action-desc">View your personal and academic details</p>
+
+            </div>
+
+            <i class="bi bi-chevron-right stu-action-arrow"></i>
+
+        </a>
+
+        <a href="{% url 'portal:gp_project' %}" class="stu-action-card">
+
+            <div class="stu-action-icon"><i class="bi bi-people"></i></div>
+
+            <div class="stu-action-body">
+
+                <div class="stu-action-title">GP Project</div>
+
+                <p class="stu-action-desc">Form group and submit project details</p>
+
+            </div>
+
+            <i class="bi bi-chevron-right stu-action-arrow"></i>
+
+        </a>
+
+    </div>
+
+
+
+    <div class="stu-section-title">Support</div>
+
+    <div class="stu-contact">
+
+        <div class="stu-contact-icon"><i class="bi bi-headset"></i></div>
+
+        <div class="stu-contact-body">
+
+            <div class="stu-contact-label">Have any query?</div>
+
+            <div class="stu-contact-text">Contact <strong>DHRUV PRAJAPATI</strong></div>
+
+            <a href="mailto:dhruv.prajapati@ljku.edu.in" class="stu-contact-email">
+
+                <i class="bi bi-envelope"></i> dhruv.prajapati@ljku.edu.in
+
+            </a>
+
+        </div>
+
+    </div>
+
+
+
+</div>
+
+{% endblock %}
+

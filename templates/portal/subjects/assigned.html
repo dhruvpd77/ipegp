@@ -1,0 +1,92 @@
+{% extends 'portal/base.html' %}
+{% load static %}
+{% block title %}Assigned Subjects{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/assigned-subjects.css' %}?v=2">
+{% endblock %}
+{% block content %}
+<div class="as-page">
+
+<div class="as-hero as-animate">
+    <div class="as-hero-inner">
+        <div class="d-flex align-items-center gap-3">
+            <div class="as-hero-icon"><i class="bi bi-person-workspace"></i></div>
+            <div>
+                <h4 class="mb-0 fw-bold">Assigned Subjects</h4>
+                <p class="mb-0 opacity-75 small">Assign subject faculty per batch — scoped to your department</p>
+            </div>
+        </div>
+        {% if department %}
+        <span class="as-stat-pill">
+            <i class="bi bi-check-circle me-1"></i> {{ total_assignments }} assignment{{ total_assignments|pluralize }} · {{ batches|length }} batch{{ batches|length|pluralize }}
+        </span>
+        {% endif %}
+    </div>
+</div>
+
+{% include 'portal/includes/department_filter.html' %}
+
+{% if not department %}
+<div class="as-empty-state as-animate as-d1">
+    <i class="bi bi-building d-block"></i>
+    <h5 class="text-muted">Select a department</h5>
+    <p class="text-muted small mb-0">Choose a department above to view batches and assign faculty to subjects.</p>
+</div>
+
+{% elif not batches %}
+<div class="as-empty-state as-animate as-d1">
+    <i class="bi bi-people d-block"></i>
+    <h5 class="text-muted">No batches found</h5>
+    <p class="text-muted small mb-0">Upload students for this department first — batches come from student records.</p>
+</div>
+
+{% elif not subjects %}
+<div class="as-empty-state as-animate as-d1">
+    <i class="bi bi-book d-block"></i>
+    <h5 class="text-muted">No subjects found</h5>
+    <p class="text-muted small mb-0">Add subjects for this department or semester first.</p>
+</div>
+
+{% else %}
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="form_type" value="save_assignments">
+
+    <div class="as-batch-grid as-animate as-d1">
+        {% for row in batch_rows %}
+        <div class="as-batch-card">
+            <div class="as-batch-head">
+                <span class="batch-label"><i class="bi bi-collection me-1"></i> Batch {{ row.batch }}</span>
+                <span class="badge bg-white text-dark">{{ row.subjects|length }} subject{{ row.subjects|length|pluralize }}</span>
+            </div>
+            <div class="as-batch-body">
+                {% for sr in row.subjects %}
+                <div class="as-subject-row {% if sr.faculty_id %}assigned{% endif %}">
+                    <span class="as-subject-tag">{{ sr.subject.name }}</span>
+                    <select name="faculty_{{ row.batch }}_{{ sr.subject.pk }}" class="form-select form-select-sm">
+                        <option value="">— Select faculty —</option>
+                        {% for f in faculty_list %}
+                        <option value="{{ f.pk }}" {% if sr.faculty_id == f.pk %}selected{% endif %}>{{ f.name }}{% if f.mentor_code %} ({{ f.mentor_code }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="as-save-bar as-animate as-d2">
+        <div>
+            <i class="bi bi-info-circle me-1"></i>
+            <span class="small">Each batch can have a different faculty per subject (e.g. A1 → FSD-2: DVP, PYTHON-II: KMS)</span>
+        </div>
+        <button type="submit" class="btn btn-save">
+            <i class="bi bi-save me-1"></i> Save All Assignments
+        </button>
+    </div>
+</form>
+{% endif %}
+
+</div>
+{% endblock %}

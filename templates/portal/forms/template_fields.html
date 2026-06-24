@@ -1,0 +1,116 @@
+{% extends 'portal/base.html' %}
+{% block title %}Manage Form Fields{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='ui-checks' title='Dynamic Form Fields' subtitle=template.name %}
+
+<div class="page-actions">
+    <a href="{% url 'portal:form_template_list' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Templates</a>
+    <a href="{% url 'portal:project_case_list' %}" class="btn btn-sm btn-primary-custom"><i class="bi bi-list-check"></i> Manage Cases</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="portal-card form-panel mb-4">
+            <div class="portal-card-header"><i class="bi bi-file-earmark-excel"></i> Import from Excel</div>
+            <div class="portal-card-body">
+                <p class="text-muted small">Upload <strong>final project details.xlsx</strong> format. Title/note rows are skipped. Built-in fields (Case, Title, Enrollment, Roll, Div, Gender, Diversity) are already on the student form — only <strong>extra columns</strong> like Group ID and Faculty Initials are imported.</p>
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="import_excel">
+                    <div class="mb-3">
+                        <label class="form-label">Excel File</label>
+                        <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Import Mode</label>
+                        <select name="import_mode" class="form-select">
+                            <option value="replace">Replace all fields from Excel</option>
+                            <option value="append">Append new fields only</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-accent w-100"><i class="bi bi-upload"></i> Import Fields from Excel</button>
+                </form>
+                {% if template.uploaded_file %}
+                <div class="form-text mt-2">Last file: {{ template.uploaded_file.name }}</div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-plus-circle"></i> Add Field Manually</div>
+            <div class="portal-card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="add_field">
+                    <div class="mb-2"><label class="form-label">Field Label *</label>{{ form.field_label }}</div>
+                    <div class="mb-2"><label class="form-label">Scope *</label>{{ form.field_scope }}</div>
+                    <div class="mb-2"><label class="form-label">Type *</label>{{ form.field_type }}</div>
+                    <div class="mb-2"><label class="form-label">Dropdown Options</label>{{ form.choices }}<div class="form-text">Comma-separated for Dropdown type</div></div>
+                    <div class="mb-2 form-check">{{ form.is_required }} <label class="form-check-label">Required</label></div>
+                    <div class="mb-3"><label class="form-label">Order</label>{{ form.order }}</div>
+                    <button type="submit" class="btn btn-primary-custom w-100">Add Field</button>
+                </form>
+            </div>
+        </div>
+        <div class="alert alert-info small mt-3 mb-0">
+            <strong>Already on student form:</strong> Case, Subject, Title, Gender/Religion Diversity, Enrollment, Roll, Div, Gender.<br>
+            <strong>From Excel auto-imports:</strong> Group ID, Subject Faculty Initials, and any other extra columns.<br>
+            Add more fields manually if needed.
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="portal-card mb-4">
+            <div class="portal-card-header"><i class="bi bi-people"></i> Group Information Fields</div>
+            <div class="portal-card-body p-0">
+                <table class="table table-custom table-sm mb-0">
+                    <thead><tr><th>Label</th><th>Type</th><th>Required</th><th>Order</th><th></th></tr></thead>
+                    <tbody>
+                    {% for f in group_fields %}
+                    <tr>
+                        <td>{{ f.field_label }}</td>
+                        <td>{{ f.get_field_type_display }}</td>
+                        <td>{% if f.is_required %}Yes{% else %}No{% endif %}</td>
+                        <td>{{ f.order }}</td>
+                        <td>
+                            <form method="post" class="d-inline" onsubmit="return confirm('Remove field?')">
+                                {% csrf_token %}<input type="hidden" name="form_type" value="delete_field"><input type="hidden" name="field_id" value="{{ f.pk }}">
+                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-muted text-center py-3">No extra group fields.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-person"></i> Individual / Member Fields</div>
+            <div class="portal-card-body p-0">
+                <table class="table table-custom table-sm mb-0">
+                    <thead><tr><th>Label</th><th>Type</th><th>Required</th><th>Order</th><th></th></tr></thead>
+                    <tbody>
+                    {% for f in member_fields %}
+                    <tr>
+                        <td>{{ f.field_label }}</td>
+                        <td>{{ f.get_field_type_display }}</td>
+                        <td>{% if f.is_required %}Yes{% else %}No{% endif %}</td>
+                        <td>{{ f.order }}</td>
+                        <td>
+                            <form method="post" class="d-inline" onsubmit="return confirm('Remove field?')">
+                                {% csrf_token %}<input type="hidden" name="form_type" value="delete_field"><input type="hidden" name="field_id" value="{{ f.pk }}">
+                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-muted text-center py-3">No extra member fields.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

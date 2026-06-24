@@ -1,0 +1,265 @@
+/* Assigned Subjects + Faculty Submissions — professional slate theme */
+.as-page {
+    --as-red: #c8102e;
+    --as-slate: #374151;
+    --as-blue: #4b5563;
+    --as-charcoal: #1f2937;
+}
+
+@keyframes asFadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.as-animate { animation: asFadeUp 0.45s ease both; }
+.as-d1 { animation-delay: 0.06s; }
+.as-d2 { animation-delay: 0.12s; }
+.as-d3 { animation-delay: 0.18s; }
+
+.as-hero {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+    border-radius: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    color: #fff;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+    border-bottom: 3px solid #3b82f6;
+}
+
+.as-hero-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.as-hero-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 0.65rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+}
+
+.as-stat-pill {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 999px;
+    padding: 0.35rem 0.9rem;
+    font-size: 0.85rem;
+}
+
+.as-batch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.25rem;
+}
+
+.as-batch-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(10, 10, 15, 0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    background: #fff;
+}
+
+.as-batch-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(10, 10, 15, 0.08);
+}
+
+.as-batch-card:nth-child(6n+1) .as-batch-head { background: linear-gradient(135deg, #1e40af, #3b82f6); }
+.as-batch-card:nth-child(6n+2) .as-batch-head { background: linear-gradient(135deg, #0f766e, #14b8a6); }
+.as-batch-card:nth-child(6n+3) .as-batch-head { background: linear-gradient(135deg, #4338ca, #6366f1); }
+.as-batch-card:nth-child(6n+4) .as-batch-head { background: linear-gradient(135deg, #9f1239, #e11d48); }
+.as-batch-card:nth-child(6n+5) .as-batch-head { background: linear-gradient(135deg, #c2410c, #f97316); }
+.as-batch-card:nth-child(6n+6) .as-batch-head { background: linear-gradient(135deg, #6d28d9, #8b5cf6); }
+
+.as-batch-head {
+    color: #fff;
+    padding: 0.85rem 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.as-batch-head .batch-label {
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: 0.02em;
+}
+
+.as-batch-body { padding: 1rem 1.1rem; }
+
+.as-subject-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0;
+    border-bottom: 1px dashed #e8ecf1;
+}
+
+.as-subject-row:last-child { border-bottom: none; }
+
+.as-subject-tag {
+    min-width: 110px;
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: #1f2937;
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 0.35rem 0.6rem;
+    text-align: center;
+}
+
+.as-subject-row select {
+    flex: 1;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    transition: border-color 0.2s;
+}
+
+.as-subject-row select:focus {
+    border-color: #94a3b8;
+    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.2);
+}
+
+.as-subject-row.assigned select {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+}
+
+.as-save-bar {
+    position: sticky;
+    bottom: 1rem;
+    z-index: 10;
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+    border-radius: 0.75rem;
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.2);
+    color: #fff;
+    margin-top: 1.5rem;
+    border-bottom: 2px solid #3b82f6;
+}
+
+.as-save-bar .btn-save {
+    background: #2563eb;
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    padding: 0.55rem 1.4rem;
+    border-radius: 0.5rem;
+    transition: background 0.15s;
+}
+
+.as-save-bar .btn-save:hover {
+    background: #1d4ed8;
+    color: #fff;
+}
+
+/* Faculty submissions */
+.fs-assignment-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.fs-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #374151;
+}
+
+.fs-chip .batch-part {
+    background: var(--as-red);
+    color: #fff;
+    border-radius: 6px;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.75rem;
+}
+
+.fs-filter-card {
+    background: #fff;
+    border-radius: 0.75rem;
+    padding: 1.1rem 1.25rem;
+    box-shadow: 0 2px 8px rgba(10, 10, 15, 0.04);
+    margin-bottom: 1.25rem;
+    border-left: 4px solid #3b82f6;
+}
+
+.fs-download-btn {
+    background: #374151;
+    border: none;
+    color: #fff !important;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    padding: 0.45rem 1rem;
+}
+
+.fs-download-btn:hover {
+    background: #1f2937;
+    color: #fff !important;
+}
+
+.fs-status-toggle {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+@media (max-width: 768px) {
+    .fs-filter-card form {
+        flex-direction: column;
+        align-items: stretch !important;
+    }
+    .fs-filter-card .d-flex.gap-2.ms-auto {
+        margin-left: 0 !important;
+        width: 100%;
+    }
+    .fs-filter-card .btn {
+        flex: 1 1 auto;
+    }
+    .fs-status-toggle {
+        width: 100%;
+    }
+    .fs-status-toggle .btn-group {
+        flex: 1;
+    }
+    .fs-status-toggle .btn-group .btn {
+        flex: 1;
+    }
+}
+
+.as-empty-state {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    background: #f8fafc;
+    border-radius: 0.75rem;
+    border: 2px dashed #e2e8f0;
+}
+
+.as-empty-state i {
+    font-size: 2.5rem;
+    color: #cbd5e1;
+    margin-bottom: 0.75rem;
+}

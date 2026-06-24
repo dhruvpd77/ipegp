@@ -1,0 +1,40 @@
+{% extends 'portal/base.html' %}
+{% block title %}Create External Form{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='plus-circle' title='Create External Registration Form' subtitle='Associate form with a semester — responses go to that semester admin' %}
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="portal-card form-panel">
+            <div class="portal-card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Form Title *</label>
+                        {{ form.title }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Semester *</label>
+                        {{ form.semester }}
+                        <div class="form-text">Submissions will only be visible to the admin of this semester.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Description</label>
+                        {{ form.description }}
+                    </div>
+                    <div class="mb-4 form-check">
+                        {{ form.is_active }}
+                        <label class="form-check-label">Active (visible on public page)</label>
+                    </div>
+                    <div class="alert alert-info small">
+                        Default fields (SR.NO, Email, Bank details, TA, Food, etc.) will be added automatically.
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100">Create & Manage Fields</button>
+                    <a href="{% url 'portal:external_form_manage_list' %}" class="btn btn-outline-secondary w-100 mt-2">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

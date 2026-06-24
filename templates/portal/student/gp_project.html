@@ -1,0 +1,525 @@
+{% extends 'portal/base.html' %}
+{% load static %}
+{% block title %}GP Project{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/gp-project.css' %}?v=5">
+{% endblock %}
+{% block content %}
+<div class="gp-page">
+
+<header class="gp-page-header">
+    <div class="gp-page-header-main">
+        <div class="gp-page-header-icon"><i class="bi bi-people-fill"></i></div>
+        <div>
+            <h1 class="gp-page-title">GP Project</h1>
+            <p class="gp-page-subtitle">{{ student.name }}</p>
+        </div>
+    </div>
+    <div class="gp-page-header-meta">
+        <span><i class="bi bi-credit-card-2-front"></i> {{ student.enrollment_no }}</span>
+        <span><i class="bi bi-collection"></i> Batch {{ student.batch }}</span>
+        <span><i class="bi bi-building"></i> {{ student.department.name }}</span>
+    </div>
+</header>
+
+{% if not show_submission_form %}
+<div class="gp-notice">
+    <i class="bi bi-info-circle"></i>
+    You are a <strong>group member</strong>. Your team details are shown below. Only the group leader can edit the project.
+</div>
+{% endif %}
+
+<div class="row g-4">
+    {% if show_submission_form %}
+    <div class="col-xl-6">
+        <div class="gp-card">
+            <div class="gp-card-header">
+                <i class="bi bi-{% if editing_group %}pencil-square{% else %}plus-lg{% endif %}"></i>
+                {% if editing_group %}Update GP Project{% else %}Submit GP Project{% endif %}
+            </div>
+            <div class="gp-card-body">
+                <form method="post" id="gpForm">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="create_group">
+
+                    <div class="gp-field">
+                        <label class="gp-label"><span class="gp-num">1</span> Select Subject</label>
+                        <select name="subject_selection" id="gpSubjectSelection" class="form-select gp-input" required>
+                            <option value="">— Choose subject —</option>
+                            {% for opt in subject_options %}
+                            <option value="{{ opt.value }}" {% if initial_subject_selection == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="gp-hint mt-2 mb-0">Theory subjects are listed separately. All practical subjects are combined into one option.</p>
+                    </div>
+
+                    <div id="gpSubjectDetails"></div>
+
+                    <div class="row g-3 mb-3" id="gpDiversityRow">
+                        <div class="col-md-6">
+                            <div class="gp-field mb-0">
+                                <label class="gp-label"><span class="gp-num gp-step-diversity">2</span> Gender Diversity</label>
+                                <select name="gender_diversity" class="form-select gp-input" required>
+                                    <option value="">— Select —</option>
+                                    {% for val, label in yes_no_choices %}
+                                    <option value="{{ val }}" {% if editing_group and editing_group.gender_diversity == val %}selected{% elif repost_values.gender_diversity == val %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="gp-field mb-0">
+                                <label class="gp-label"><span class="gp-num gp-step-religion">3</span> Religion Diversity</label>
+                                <select name="religion_diversity" class="form-select gp-input" required>
+                                    <option value="">— Select —</option>
+                                    {% for val, label in yes_no_choices %}
+                                    <option value="{{ val }}" {% if editing_group and editing_group.religion_diversity == val %}selected{% elif repost_values.religion_diversity == val %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if group_fields %}
+                    <div class="gp-panel">
+                        <div class="gp-panel-title">Additional Group Information</div>
+                        {% for field in group_fields %}
+                        <div class="gp-field">
+                            <label class="gp-label-sm">{{ field.field_label }}{% if field.is_required %} *{% endif %}</label>
+                            {% if 'faculty' in field.field_label|lower %}
+                            <input type="text" name="group_{{ field.field_name }}" class="form-control gp-input group-dynamic faculty-initials-field" data-field="{{ field.field_name }}" data-faculty-field="1" readonly placeholder="Auto-filled from assigned faculty">
+                            {% elif field.field_type == 'yes_no' %}
+                            <select name="group_{{ field.field_name }}" class="form-select gp-input group-dynamic" data-field="{{ field.field_name }}" {% if field.is_required %}required{% endif %}>
+                                <option value="">— Select —</option>
+                                <option value="Yes">Yes</option>
+                                <option value="No">No</option>
+                            </select>
+                            {% elif field.field_type == 'select' %}
+                            <select name="group_{{ field.field_name }}" class="form-select gp-input group-dynamic" data-field="{{ field.field_name }}" {% if field.is_required %}required{% endif %}>
+                                <option value="">— Select —</option>
+                                {% for opt in field.choice_list %}<option value="{{ opt }}">{{ opt }}</option>{% endfor %}
+                            </select>
+                            {% elif field.field_type == 'textarea' %}
+                            <textarea name="group_{{ field.field_name }}" class="form-control gp-input group-dynamic" data-field="{{ field.field_name }}" rows="2" {% if field.is_required %}required{% endif %}></textarea>
+                            {% else %}
+                            <input type="text" name="group_{{ field.field_name }}" class="form-control gp-input group-dynamic" data-field="{{ field.field_name }}" {% if field.is_required %}required{% endif %}>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="gp-panel">
+                        <label class="gp-label"><span class="gp-num gp-step-members">4</span> Group Members</label>
+                        <p class="gp-hint">Students already in a team for any selected subject are hidden.</p>
+                        <div id="memberRows"></div>
+                        <button type="button" class="btn gp-btn-outline w-100 mt-2" id="addMemberBtn">
+                            <i class="bi bi-person-plus"></i> Add Member
+                        </button>
+                    </div>
+
+                    <div class="gp-form-actions">
+                        <button type="submit" class="btn btn-primary-custom btn-lg w-100">
+                            <i class="bi bi-check-circle"></i>
+                            {% if editing_group %}Update Project{% else %}Submit Project{% endif %}
+                        </button>
+                        {% if editing_group %}
+                        <a href="{% url 'portal:gp_project' %}" class="btn btn-outline-secondary btn-lg w-100 mt-2">Cancel</a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="{% if show_submission_form %}col-xl-6{% else %}col-12{% endif %}">
+        <div class="gp-card gp-card-projects">
+            <div class="gp-card-header gp-card-header-flex">
+                <span><i class="bi bi-folder-check"></i> My Submitted Projects</span>
+                <span class="gp-count-badge">{{ existing_groups.count }}</span>
+            </div>
+            <div class="gp-card-body gp-projects-body">
+                <ul class="nav gp-project-tabs" id="gpProjectsTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="gp-tab-mine" data-bs-toggle="tab" data-bs-target="#gp-pane-mine" type="button" role="tab">
+                            <i class="bi bi-folder-check"></i> My Projects
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="gp-tab-classmates" data-bs-toggle="tab" data-bs-target="#gp-pane-classmates" type="button" role="tab">
+                            <i class="bi bi-collection"></i> Batch Titles
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content gp-tab-content" id="gpProjectsTabContent">
+                    <div class="tab-pane fade show active" id="gp-pane-mine" role="tabpanel">
+                {% for g in existing_groups %}
+                <article class="gp-project">
+                    <div class="gp-project-header">
+                        <h2 class="gp-project-name">{{ g.name }}</h2>
+                        <span class="gp-project-subject">
+                            {{ g.subject.name|default:"No subject" }}
+                            {% if g.subject.subject_type == 'PRACTICAL' %}(Practical){% else %}(Theory){% endif %}
+                        </span>
+                    </div>
+
+                    <table class="gp-details-table">
+                        <tbody>
+                            <tr>
+                                <th>Case</th>
+                                <td>{{ g.project_case.name|default:"—" }}</td>
+                                <th>Subject</th>
+                                <td>{{ g.subject.name|default:"—" }}</td>
+                            </tr>
+                            <tr>
+                                <th>Gender Diversity</th>
+                                <td>{{ g.gender_diversity|default:"—" }}</td>
+                                <th>Religion Diversity</th>
+                                <td>{{ g.religion_diversity|default:"—" }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="gp-members-block">
+                        <h3 class="gp-members-title">Group Members</h3>
+                        <div class="gp-table-wrap">
+                            <table class="gp-members-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Enrollment</th>
+                                        <th>Roll</th>
+                                        <th>Branch</th>
+                                        <th>Gender</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                {% for d in g.member_details.all %}
+                                    <tr{% if d.student_id == g.leader_id %} class="is-leader"{% endif %}>
+                                        <td class="gp-name-cell">
+                                            {{ d.student.name }}
+                                            {% if d.student_id == g.leader_id %}<span class="gp-leader-tag">Leader</span>{% endif %}
+                                        </td>
+                                        <td>{{ d.student.enrollment_no }}</td>
+                                        <td>{{ d.student.roll_no }}</td>
+                                        <td>{{ d.student.branch }}</td>
+                                        <td>{{ d.gender }}</td>
+                                    </tr>
+                                {% empty %}
+                                {% for m in g.members.all %}
+                                    <tr>
+                                        <td class="gp-name-cell">{{ m.name }}</td>
+                                        <td>{{ m.enrollment_no }}</td>
+                                        <td>{{ m.roll_no }}</td>
+                                        <td>{{ m.branch }}</td>
+                                        <td>—</td>
+                                    </tr>
+                                {% endfor %}
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {% if g.leader_id == student.pk %}
+                    <div class="gp-project-footer">
+                        {% if g.linked_batch_id %}
+                        <span class="small text-muted d-block mb-2"><i class="bi bi-link-45deg"></i> Part of a combined practical submission</span>
+                        {% endif %}
+                        <a href="{% url 'portal:gp_group_edit' g.pk %}" class="btn btn-primary"><i class="bi bi-pencil-square"></i> Edit Project</a>
+                        <form method="post" action="{% url 'portal:gp_group_delete' g.pk %}" onsubmit="return confirm('Delete this project?')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-danger"><i class="bi bi-trash"></i> Delete</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </article>
+                {% empty %}
+                <div class="gp-empty">
+                    <i class="bi bi-folder2-open"></i>
+                    <p>No project submitted yet.</p>
+                    <p class="gp-empty-sub">Fill the form to create your group.</p>
+                </div>
+                {% endfor %}
+                    </div>
+
+                    <div class="tab-pane fade" id="gp-pane-classmates" role="tabpanel">
+                        <p class="gp-hint gp-batch-titles-intro">Project titles already submitted by classmates in Batch {{ student.batch }} — choose a unique title for your group.</p>
+                        {% if classmate_titles_by_subject %}
+                        <ul class="nav gp-subject-tabs" id="gpBatchSubjectTabs" role="tablist">
+                            {% for item in classmate_titles_by_subject %}
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link {% if forloop.first %}active{% endif %}"
+                                        id="gp-batch-tab-{{ item.subject.pk }}"
+                                        data-bs-toggle="tab"
+                                        data-bs-target="#gp-batch-subject-{{ item.subject.pk }}"
+                                        type="button" role="tab">
+                                    {{ item.subject.name }}
+                                    {% if item.subject.subject_type == 'PRACTICAL' %}<span class="gp-subject-type-tag">Practical</span>{% endif %}
+                                    <span class="gp-subject-count">{{ item.titles|length }}</span>
+                                </button>
+                            </li>
+                            {% endfor %}
+                        </ul>
+
+                        <div class="tab-content gp-batch-subject-content" id="gpBatchSubjectTabContent">
+                            {% for item in classmate_titles_by_subject %}
+                            <div class="tab-pane fade {% if forloop.first %}show active{% endif %}"
+                                 id="gp-batch-subject-{{ item.subject.pk }}"
+                                 role="tabpanel"
+                                 aria-labelledby="gp-batch-tab-{{ item.subject.pk }}">
+                                {% if item.titles %}
+                                <div class="gp-table-wrap">
+                                    <table class="gp-batch-titles-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="gp-col-sr">Sr. No.</th>
+                                                <th>Project Title</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for title in item.titles %}
+                                            <tr>
+                                                <td class="gp-col-sr">{{ forloop.counter }}</td>
+                                                <td>{{ title }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% else %}
+                                <div class="gp-batch-empty">
+                                    <i class="bi bi-inbox"></i>
+                                    <p>No titles taken yet for this subject in your batch.</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="gp-empty">
+                            <i class="bi bi-inbox"></i>
+                            <p>No subjects configured for your department.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if show_submission_form %}
+<script>
+const SUBJECT_OPTIONS = {{ subject_options_json|safe }};
+const STUDENTS = {{ students_json|safe }};
+const MEMBER_DETAILS = {{ member_details_json|safe }};
+const GROUP_DATA = {{ group_data_json|safe }};
+const INITIAL_MEMBERS = {{ initial_members_json|safe }};
+const FACULTY_BY_SUBJECT = {{ faculty_by_subject_json|safe }};
+const TAKEN_BY_SUBJECT = {{ taken_by_subject_json|safe }};
+const TAKEN_TITLES_BY_SUBJECT = {{ taken_titles_by_subject_json|safe }};
+const STUDENT_BATCH = "{{ student.batch|escapejs }}";
+const BUNDLE_ENTRIES = {{ bundle_entries_json|safe }};
+const PROJECT_CASES = [
+    {% for c in project_cases %}{ pk: {{ c.pk }}, name: "{{ c.name|escapejs }}" }{% if not forloop.last %},{% endif %}{% endfor %}
+];
+const GENDER_HTML = `{% for val, label in gender_choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
+
+function getSelectedOption() {
+    const val = document.getElementById('gpSubjectSelection')?.value || '';
+    return SUBJECT_OPTIONS.find(o => o.value === val) || null;
+}
+
+function getActiveSubjectIds() {
+    const opt = getSelectedOption();
+    return opt ? opt.subjects.map(s => String(s.pk)) : [];
+}
+
+function takenSetForSubjects(subjectIds) {
+    const editing = new Set(INITIAL_MEMBERS.map(String));
+    const taken = new Set();
+    subjectIds.forEach(sid => {
+        (TAKEN_BY_SUBJECT[sid] || []).forEach(pk => {
+            if (!editing.has(String(pk))) taken.add(String(pk));
+        });
+    });
+    return taken;
+}
+
+function studentOptions(selectedPk, subjectIds) {
+    const taken = takenSetForSubjects(subjectIds);
+    let h = '<option value="">— Select Enrollment —</option>';
+    STUDENTS.forEach(s => {
+        const pk = String(s.pk);
+        if (taken.has(pk) && pk !== String(selectedPk)) return;
+        h += `<option value="${pk}"${pk === String(selectedPk) ? ' selected' : ''}>${s.enrollment_no} — ${s.name}</option>`;
+    });
+    return h;
+}
+
+function caseOptions(selectedId) {
+    let h = '<option value="">— Choose a project case —</option>';
+    PROJECT_CASES.forEach(c => {
+        h += `<option value="${c.pk}"${String(c.pk) === String(selectedId) ? ' selected' : ''}>${c.name}</option>`;
+    });
+    if (!PROJECT_CASES.length) {
+        h += '<option value="" disabled>No cases — ask admin to add cases</option>';
+    }
+    return h;
+}
+
+function fillFacultyInitials() {
+    const ids = getActiveSubjectIds();
+    const parts = ids.map(id => FACULTY_BY_SUBJECT[id]).filter(Boolean);
+    const initials = parts.join(' / ');
+    document.querySelectorAll('[data-faculty-field]').forEach(el => { el.value = initials; });
+}
+
+function updateStepNumbers(count) {
+    const base = 1 + (count * 2);
+    document.querySelectorAll('.gp-step-diversity').forEach(el => { el.textContent = base; });
+    document.querySelectorAll('.gp-step-religion').forEach(el => { el.textContent = base + 1; });
+    document.querySelectorAll('.gp-step-members').forEach(el => { el.textContent = base + 2; });
+}
+
+function takenTitlesHtml(subjectId) {
+    const titles = TAKEN_TITLES_BY_SUBJECT[String(subjectId)] || [];
+    if (!titles.length) {
+        return `<div class="gp-taken-titles">
+            <div class="gp-taken-titles-label">Already taken titles (Batch ${STUDENT_BATCH})</div>
+            <p class="gp-taken-titles-empty">No titles taken yet for this subject in your batch.</p>
+        </div>`;
+    }
+    const items = titles.map(t => `<li>${t.replace(/</g, '&lt;')}</li>`).join('');
+    return `<div class="gp-taken-titles">
+        <div class="gp-taken-titles-label">Already taken titles (Batch ${STUDENT_BATCH})</div>
+        <ul>${items}</ul>
+    </div>`;
+}
+
+function renderSubjectDetails() {
+    const container = document.getElementById('gpSubjectDetails');
+    const opt = getSelectedOption();
+    container.innerHTML = '';
+    if (!opt) {
+        updateStepNumbers(0);
+        return;
+    }
+
+    let step = 2;
+    opt.subjects.forEach(sub => {
+        const existing = BUNDLE_ENTRIES.find(e => String(e.subject_id) === String(sub.pk)) || {};
+        const block = document.createElement('div');
+        block.className = 'gp-panel mb-3';
+        block.innerHTML = `
+            <div class="gp-panel-title">${sub.name}</div>
+            <div class="gp-field">
+                <label class="gp-label"><span class="gp-num">${step}</span> Select Case — ${sub.name}</label>
+                <select name="case_${sub.pk}" class="form-select gp-input subject-case" required>
+                    ${caseOptions(existing.case_id || '')}
+                </select>
+            </div>
+            <div class="gp-field mb-0">
+                <label class="gp-label"><span class="gp-num">${step + 1}</span> Project Title — ${sub.name}</label>
+                <input type="text" name="title_${sub.pk}" class="form-control gp-input" required
+                       placeholder="Enter project title for ${sub.name}"
+                       value="${existing.title ? existing.title.replace(/"/g, '&quot;') : ''}">
+                ${takenTitlesHtml(sub.pk)}
+            </div>`;
+        container.appendChild(block);
+        step += 2;
+    });
+    updateStepNumbers(opt.subjects.length);
+    fillFacultyInitials();
+    refreshMemberDropdowns();
+}
+
+function refreshMemberDropdowns() {
+    const subjectIds = getActiveSubjectIds();
+    document.querySelectorAll('.member-enroll').forEach(sel => {
+        const current = sel.value;
+        sel.innerHTML = studentOptions(current, subjectIds);
+        if (current && !Array.from(sel.options).some(o => o.value === current)) {
+            sel.value = '';
+            const row = sel.closest('.member-row');
+            if (row) {
+                row.querySelector('.member-roll').value = '';
+                row.querySelector('.member-div').value = '';
+            }
+        }
+    });
+}
+
+function addMemberRow(studentPk) {
+    const row = document.createElement('div');
+    row.className = 'gp-member-row member-row';
+    const pk = studentPk || '';
+    const subjectIds = getActiveSubjectIds();
+    const stu = STUDENTS.find(s => String(s.pk) === String(pk)) || {};
+    const det = MEMBER_DETAILS[String(pk)] || {};
+    row.innerHTML = `
+    <div class="row g-3 align-items-end">
+        <div class="col-lg-5 col-12">
+            <label class="gp-label-sm">Enrollment *</label>
+            <select class="form-select gp-input member-enroll" required>${studentOptions(pk, subjectIds)}</select>
+        </div>
+        <div class="col-lg-2 col-4">
+            <label class="gp-label-sm">Roll</label>
+            <input class="form-control gp-input member-roll bg-light" readonly value="${stu.roll_no||''}">
+        </div>
+        <div class="col-lg-2 col-4">
+            <label class="gp-label-sm">Branch</label>
+            <input class="form-control gp-input member-div bg-light" readonly value="${stu.branch||''}">
+        </div>
+        <div class="col-lg-2 col-4">
+            <label class="gp-label-sm">Gender *</label>
+            <select class="form-select gp-input member-gender" required><option value="">—</option>${GENDER_HTML}</select>
+        </div>
+        <div class="col-lg-1 col-12 d-flex align-items-end">
+            <button type="button" class="btn btn-outline-danger remove-member w-100" title="Remove"><i class="bi bi-x-lg"></i></button>
+        </div>
+    </div>`;
+    document.getElementById('memberRows').appendChild(row);
+    const enroll = row.querySelector('.member-enroll');
+    const gender = row.querySelector('.member-gender');
+    if (det.gender) gender.value = det.gender;
+    function sync() {
+        const s = STUDENTS.find(x => String(x.pk) === enroll.value);
+        row.querySelector('.member-roll').value = s ? s.roll_no : '';
+        row.querySelector('.member-div').value = s ? s.branch : '';
+        enroll.name = 'member_ids';
+        gender.name = 'member_gender_' + enroll.value;
+    }
+    enroll.addEventListener('change', sync);
+    if (pk) sync();
+    row.querySelector('.remove-member').onclick = () => {
+        if (document.querySelectorAll('.member-row').length > 1) row.remove();
+    };
+}
+
+document.getElementById('addMemberBtn').onclick = () => addMemberRow('');
+INITIAL_MEMBERS.forEach(pk => addMemberRow(pk));
+if (!INITIAL_MEMBERS.length) addMemberRow('');
+
+document.querySelectorAll('.group-dynamic').forEach(el => {
+    const k = el.dataset.field;
+    if (GROUP_DATA[k] && !el.dataset.facultyField) el.value = GROUP_DATA[k];
+});
+document.querySelectorAll('[data-faculty-field]').forEach(el => {
+    if (GROUP_DATA[el.dataset.field]) el.value = GROUP_DATA[el.dataset.field];
+});
+
+const selectionEl = document.getElementById('gpSubjectSelection');
+if (selectionEl) {
+    selectionEl.addEventListener('change', renderSubjectDetails);
+    renderSubjectDetails();
+}
+</script>
+{% endif %}
+{% endblock %}

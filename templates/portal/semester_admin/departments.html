@@ -1,0 +1,91 @@
+{% extends 'portal/base.html' %}
+{% block title %}Departments{% endblock %}
+{% block content %}
+
+{% if semester %}
+{% include 'portal/includes/section_header.html' with icon='building' title='Departments' subtitle=semester.name %}
+{% else %}
+{% include 'portal/includes/section_header.html' with icon='building' title='Departments' subtitle='Manage departments' %}
+{% endif %}
+
+{% if is_super and semesters %}
+<div class="filter-bar mb-4">
+    <form method="get" class="d-flex align-items-center gap-2">
+        <label class="fw-semibold">Semester:</label>
+        <select name="semester" class="form-select form-select-sm" style="width:auto;min-width:200px;" onchange="this.form.submit()">
+            <option value="">All Semesters</option>
+            {% for s in semesters %}
+            <option value="{{ s.pk }}" {% if semester and semester.pk == s.pk %}selected{% endif %}>{{ s.name }} ({{ s.academic_year }})</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-plus-circle"></i> Create Department</div>
+            <div class="portal-card-body">
+                {% if not semester %}
+                <div class="alert alert-warning small mb-0">
+                    {% if is_super %}
+                    Select a semester from the dropdown above, or <a href="{% url 'portal:semester_list' %}">create a semester</a> first.
+                    {% else %}
+                    No semester assigned to your account.
+                    {% endif %}
+                </div>
+                {% else %}
+                <form method="post" action="{% url 'portal:department_list' %}">
+                    {% csrf_token %}
+                    {% if is_super %}
+                    <input type="hidden" name="semester_id" value="{{ semester.pk }}">
+                    {% endif %}
+                    <div class="mb-3">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        {{ form.name }}
+                        {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
+                    </div>
+                    <div class="mb-3"><label class="form-label">Code</label>{{ form.code }}</div>
+                    <div class="alert alert-light border small py-2 mb-3">
+                        Semester: <strong>{{ semester.name }}</strong>
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100">Create Department</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-table"></i> Department List</div>
+            <div class="portal-card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-custom table-hover mb-0">
+                        <thead><tr><th>Name</th><th>Code</th><th>Semester</th><th>Students</th><th>Actions</th></tr></thead>
+                        <tbody>
+                        {% for dept in departments %}
+                        <tr>
+                            <td class="fw-semibold">{{ dept.name }}</td>
+                            <td>{{ dept.code|default:"—" }}</td>
+                            <td>{{ dept.semester.name }}</td>
+                            <td>{{ dept.students.count }}</td>
+                            <td class="text-nowrap">
+                                <a href="{% url 'portal:create_department_admin' dept.pk %}" class="btn btn-sm btn-outline-primary">+ Admin</a>
+                                <form method="post" action="{% url 'portal:department_delete' dept.pk %}" class="d-inline" onsubmit="return confirm('Delete this department?')">
+                                    {% csrf_token %}
+                                    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted py-4">No departments yet. Create one using the form.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

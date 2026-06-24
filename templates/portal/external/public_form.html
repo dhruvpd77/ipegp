@@ -1,0 +1,155 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>External Examiner Registration | LJ University</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{% static 'css/portal-public-theme.css' %}?v=3">
+    <link rel="stylesheet" href="{% static 'css/external-form.css' %}?v=4">
+</head>
+<body class="ext-page">
+<div class="ext-public-bg">
+    <nav class="ext-public-topbar">
+        <div class="pub-topbar-brand">
+            <div class="pub-logo-box" style="padding:0.4rem 0.65rem;">
+                <img src="{% static 'images/lju-logo.png' %}" alt="LJU" style="height:28px;">
+            </div>
+            <div class="pub-logo-box" style="padding:0.35rem 0.55rem;">
+                <img src="{% static 'images/ljiet-logo-sif.png' %}" alt="LJIET" style="height:32px;">
+            </div>
+            <span class="pub-topbar-title d-none d-sm-inline">IPE/GP Portal</span>
+        </div>
+        <a href="{% url 'portal:home' %}" class="pub-btn-outline"><i class="bi bi-box-arrow-in-right"></i> Sign In</a>
+    </nav>
+
+    {% if messages %}
+    <div class="container mt-3" style="max-width:780px;">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show">{{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="ext-hero">
+        <h1><i class="bi bi-person-badge me-2"></i>External Examiner Registration</h1>
+        <p>Register as an external examiner for IPE/GP examinations at LJ Institute of Engineering &amp; Technology, LJ University.</p>
+    </div>
+
+    {% if not reg_form %}
+    <div class="ext-picker-grid">
+        {% for f in active_forms %}
+        <a href="{% url 'portal:become_external_form' f.pk %}" class="ext-picker-card">
+            <span class="sem-badge">{{ f.semester.name }}</span>
+            <h5 class="fw-bold mb-1">{{ f.title }}</h5>
+            <p class="text-muted small mb-0">{{ f.semester.academic_year }}</p>
+        </a>
+        {% empty %}
+        <div class="col-12 text-center py-5" style="grid-column:1/-1;">
+            <i class="bi bi-calendar-x fs-1 d-block mb-2" style="color:rgba(201,162,39,0.5);"></i>
+            <p class="text-white-50">No registration forms are open at this time.</p>
+            <a href="{% url 'portal:home' %}" class="pub-btn-outline mt-2 d-inline-flex">Back to Sign In</a>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% else %}
+    <div class="ext-form-card">
+        <div class="ext-form-card-header">
+            <h2>{{ reg_form.title }}</h2>
+            <p class="mb-0 small opacity-75">{{ reg_form.semester.name }} · {{ reg_form.semester.academic_year }}</p>
+        </div>
+        <div class="ext-form-card-body">
+            {% if reg_form.description %}
+            <p class="text-muted small mb-4">{{ reg_form.description }}</p>
+            {% endif %}
+
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <div class="ext-section-title"><i class="bi bi-person"></i> Personal Details</div>
+                {% for field in form %}
+                {% if field.name in 'sr_no,email_address,examiner_name_bank,available_date,photograph,qualification,organization,designation,experience,email,contact_no' %}
+                <div class="ext-field-group">
+                    <label for="{{ field.id_for_label }}">
+                        {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+                    </label>
+                    {{ field }}
+                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                    {% for err in field.errors %}<div class="text-danger">{{ err }}</div>{% endfor %}
+                </div>
+                {% endif %}
+                {% endfor %}
+
+                <div class="ext-section-title"><i class="bi bi-bank"></i> Bank Details</div>
+                {% for field in form %}
+                {% if field.name in 'bank_account_number,bank_name,ifsc_code,bank_branch,address' %}
+                <div class="ext-field-group">
+                    <label for="{{ field.id_for_label }}">
+                        {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+                    </label>
+                    {{ field }}
+                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                    {% for err in field.errors %}<div class="text-danger">{{ err }}</div>{% endfor %}
+                </div>
+                {% endif %}
+                {% endfor %}
+
+                <div class="ext-section-title"><i class="bi bi-cash-coin"></i> Travel &amp; Food</div>
+                {% for field in form %}
+                {% if field.name in 'ta_km_one_way,ta_amount,food_preference' %}
+                <div class="ext-field-group">
+                    <label for="{{ field.id_for_label }}">
+                        {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+                    </label>
+                    {{ field }}
+                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                    {% for err in field.errors %}<div class="text-danger">{{ err }}</div>{% endfor %}
+                </div>
+                {% endif %}
+                {% endfor %}
+
+                {% for field in form %}
+                {% if field.name not in 'sr_no,email_address,examiner_name_bank,available_date,photograph,qualification,organization,designation,experience,email,contact_no,bank_account_number,bank_name,ifsc_code,bank_branch,address,ta_km_one_way,ta_amount,food_preference' %}
+                <div class="ext-field-group">
+                    <label for="{{ field.id_for_label }}">
+                        {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+                    </label>
+                    {{ field }}
+                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                    {% for err in field.errors %}<div class="text-danger">{{ err }}</div>{% endfor %}
+                </div>
+                {% endif %}
+                {% endfor %}
+
+                <button type="submit" class="ext-submit-btn">
+                    Submit Registration
+                </button>
+            </form>
+        </div>
+    </div>
+    <p class="text-center mt-3 mb-0">
+        <a href="{% url 'portal:become_external' %}" class="pub-link-gold"><i class="bi bi-arrow-left"></i> Choose different semester</a>
+    </p>
+    {% endif %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+    var kmInput = document.getElementById('id_ta_km_one_way');
+    var amtInput = document.getElementById('id_ta_amount');
+    if (kmInput && amtInput) {
+        kmInput.addEventListener('input', function () {
+            var km = parseFloat(kmInput.value);
+            if (!isNaN(km) && km >= 0) amtInput.value = (km * 8).toFixed(2);
+        });
+    }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,150 @@
+{% extends 'portal/base.html' %}
+{% block title %}Syllabus & Papers{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='file-earmark-text' title='Syllabus & Papers' subtitle='Upload subject-wise syllabus (PDF/Word) and phase-wise question papers (Word)' %}
+
+{% if show_dept_filter %}
+<div class="filter-bar mb-4 flex-wrap">
+    {% include 'portal/includes/department_filter.html' %}
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="portal-card form-panel mb-4">
+            <div class="portal-card-header"><i class="bi bi-journal-text"></i> Upload Syllabus</div>
+            <div class="portal-card-body">
+                <p class="small text-muted mb-3">PDF, DOC, or DOCX — one syllabus per subject. Semester admin uploads apply to <strong>all departments</strong>.</p>
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="upload_syllabus">
+                    {% if department %}<input type="hidden" name="department_id" value="{{ department.pk }}">{% endif %}
+                    <div class="mb-3">
+                        <label class="form-label">Subject</label>
+                        {{ syllabus_form.subject }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Title (optional)</label>
+                        {{ syllabus_form.title }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Syllabus File</label>
+                        {{ syllabus_form.file }}
+                    </div>
+                    <div class="mb-3 form-check">
+                        {{ syllabus_form.replace_existing }}
+                        <label class="form-check-label" for="{{ syllabus_form.replace_existing.id_for_label }}">Replace existing</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100"><i class="bi bi-upload"></i> Upload Syllabus</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-file-earmark-word"></i> Upload Question Paper</div>
+            <div class="portal-card-body">
+                <p class="small text-muted mb-3">PDF, DOC, or DOCX — upload phase-wise papers (Phase 1, 2, 3 …) per subject.</p>
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="upload_paper">
+                    {% if department %}<input type="hidden" name="department_id" value="{{ department.pk }}">{% endif %}
+                    <div class="mb-3">
+                        <label class="form-label">Subject</label>
+                        {{ paper_form.subject }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Phase</label>
+                        {{ paper_form.phase }}
+                        <div class="form-text">e.g. 1 for Phase 1, 2 for Phase 2</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Title (optional)</label>
+                        {{ paper_form.title }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Paper File (PDF / Word)</label>
+                        {{ paper_form.file }}
+                    </div>
+                    <div class="mb-3 form-check">
+                        {{ paper_form.replace_existing }}
+                        <label class="form-check-label" for="{{ paper_form.replace_existing.id_for_label }}">Replace existing</label>
+                    </div>
+                    <button type="submit" class="btn btn-accent w-100"><i class="bi bi-upload"></i> Upload Paper</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="portal-card mb-4">
+            <div class="portal-card-header"><i class="bi bi-journal-check"></i> Uploaded Syllabi</div>
+            <div class="portal-card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-custom table-hover mb-0">
+                        <thead><tr><th>Subject</th><th>Title</th><th>File</th><th>Scope</th><th>Date</th><th></th></tr></thead>
+                        <tbody>
+                        {% for s in syllabi %}
+                        <tr>
+                            <td class="fw-semibold">{{ s.subject.name }}</td>
+                            <td>{{ s.display_title }}</td>
+                            <td>
+                                <a href="{{ s.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-download"></i> {{ s.file_ext }}
+                                </a>
+                            </td>
+                            <td class="small text-muted">{% if s.department %}{{ s.department.name }}{% else %}All Departments{% endif %}</td>
+                            <td class="small">{{ s.created_at|date:"d M Y" }}</td>
+                            <td>
+                                <form method="post" action="{% url 'portal:syllabus_delete' s.pk %}" onsubmit="return confirm('Remove this syllabus?')">
+                                    {% csrf_token %}
+                                    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted py-4">No syllabi uploaded yet.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-files"></i> Uploaded Papers</div>
+            <div class="portal-card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-custom table-hover mb-0">
+                        <thead><tr><th>Subject</th><th>Phase</th><th>Title</th><th>File</th><th>Scope</th><th>Date</th><th></th></tr></thead>
+                        <tbody>
+                        {% for p in papers %}
+                        <tr>
+                            <td class="fw-semibold">{{ p.subject.name }}</td>
+                            <td><span class="badge bg-primary">Phase {{ p.phase }}</span></td>
+                            <td>{{ p.display_title }}</td>
+                            <td>
+                                <a href="{{ p.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-download"></i> Download
+                                </a>
+                            </td>
+                            <td class="small text-muted">{% if p.department %}{{ p.department.name }}{% else %}All Departments{% endif %}</td>
+                            <td class="small">{{ p.created_at|date:"d M Y" }}</td>
+                            <td>
+                                <form method="post" action="{% url 'portal:paper_delete' p.pk %}" onsubmit="return confirm('Remove this paper?')">
+                                    {% csrf_token %}
+                                    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-4">No papers uploaded yet.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,224 @@
+{% extends 'portal/base.html' %}
+{% block title %}Student Management{% endblock %}
+{% block content %}
+
+{% if department %}
+{% include 'portal/includes/section_header.html' with icon='people' title='Student Management' subtitle=department.name %}
+{% else %}
+{% include 'portal/includes/section_header.html' with icon='people' title='Student Management' subtitle='Manage students, credentials and batch filters' %}
+{% endif %}
+<div class="page-actions">
+    <button type="button" class="btn btn-sm btn-primary-custom" data-bs-toggle="modal" data-bs-target="#uploadStudentsModal">
+        <i class="bi bi-upload"></i> Upload Excel
+    </button>
+    <a href="{% url 'portal:export_students' %}{% if department %}?department={{ department.pk }}{% endif %}{% if batch_filter %}&batch={{ batch_filter }}{% endif %}" class="btn btn-sm btn-accent">
+        <i class="bi bi-download"></i> Export
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="filter-bar">
+    {% include 'portal/includes/department_filter.html' %}
+
+    <form method="get" class="d-flex align-items-center gap-2">
+        {% if show_dept_filter %}<input type="hidden" name="department" value="{% if department %}{{ department.pk }}{% else %}all{% endif %}">{% elif department %}<input type="hidden" name="department" value="{{ department.pk }}">{% endif %}
+        <label>Batch:</label>
+        <select name="batch" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
+            <option value="">All Batches</option>
+            {% for b in batches %}
+            <option value="{{ b }}" {% if batch_filter == b %}selected{% endif %}>{{ b }}</option>
+            {% endfor %}
+        </select>
+        {% if search %}<input type="hidden" name="q" value="{{ search }}">{% endif %}
+    </form>
+
+    <form method="get" class="d-flex align-items-center gap-2 flex-grow-1">
+        {% if show_dept_filter %}<input type="hidden" name="department" value="{% if department %}{{ department.pk }}{% else %}all{% endif %}">{% elif department %}<input type="hidden" name="department" value="{{ department.pk }}">{% endif %}
+        {% if batch_filter %}<input type="hidden" name="batch" value="{{ batch_filter }}">{% endif %}
+        <label><i class="bi bi-search"></i></label>
+        <input type="text" name="q" class="form-control form-control-sm" placeholder="Search name, enrollment, roll, batch..." value="{{ search }}" style="max-width:280px;">
+        <button type="submit" class="btn btn-sm btn-primary-custom">Search</button>
+        {% if search %}
+        <a href="?{% if show_dept_filter %}department={% if department %}{{ department.pk }}{% else %}all{% endif %}&{% elif department %}department={{ department.pk }}&{% endif %}{% if batch_filter %}batch={{ batch_filter }}{% endif %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+        {% endif %}
+    </form>
+
+    <span class="badge bg-primary ms-auto">{{ total_count }} student{{ total_count|pluralize }}</span>
+</div>
+
+<div class="row g-4">
+    <!-- Add Student Form -->
+    <div class="col-lg-3">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-person-plus"></i> Add Student</div>
+            <div class="portal-card-body">
+                {% if not department %}
+                <div class="alert alert-warning small mb-0">Select a department first.</div>
+                {% else %}
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="add_student">
+                    <input type="hidden" name="department_id" value="{{ department.pk }}">
+                    <div class="mb-2"><label class="form-label">Roll No</label>{{ form.roll_no }}</div>
+                    <div class="mb-2"><label class="form-label">Name *</label>{{ form.name }}</div>
+                    <div class="mb-2"><label class="form-label">Enrollment No *</label>{{ form.enrollment_no }}</div>
+                    <div class="mb-2"><label class="form-label">Branch</label>{{ form.branch }}</div>
+                    <div class="mb-2"><label class="form-label">Batch</label>{{ form.batch }}</div>
+                    <div class="mb-2"><label class="form-label">Mentor</label>{{ form.mentor }}</div>
+                    <div class="mb-2"><label class="form-label">Phone</label>{{ form.student_phone }}</div>
+                    <div class="mb-3"><label class="form-label">Parent Contact</label>{{ form.parent_contact }}</div>
+                    <button type="submit" class="btn btn-primary-custom w-100">Add Student</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Student Table -->
+    <div class="col-lg-9">
+        <div class="portal-card">
+            <div class="portal-card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-table"></i> Student List</span>
+            </div>
+            <div class="portal-card-body p-0">
+                <form method="post" action="{% url 'portal:generate_student_credentials' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="batch" value="{{ batch_filter }}">
+                    {% if department %}<input type="hidden" name="department_id" value="{{ department.pk }}">{% endif %}
+                    <div class="table-responsive">
+                        <table class="table table-custom table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" onclick="document.querySelectorAll('.stu-check').forEach(c=>c.checked=this.checked)"></th>
+                                    {% if not department and show_dept_filter %}<th>Dept</th>{% endif %}
+                                    <th>Roll</th>
+                                    <th>Name</th>
+                                    <th>Enrollment</th>
+                                    <th>Batch</th>
+                                    <th>Mentor</th>
+                                    <th>Phone</th>
+                                    <th>Credentials</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for s in students %}
+                            <tr>
+                                <td><input type="checkbox" class="stu-check" name="student_ids" value="{{ s.pk }}"></td>
+                                {% if not department and show_dept_filter %}<td><span class="badge bg-secondary">{{ s.department.name }}</span></td>{% endif %}
+                                <td>{{ s.roll_no }}</td>
+                                <td class="fw-semibold">{{ s.name }}</td>
+                                <td>{{ s.enrollment_no }}</td>
+                                <td><span class="badge bg-primary">{{ s.batch }}</span></td>
+                                <td>{{ s.mentor }}</td>
+                                <td>{{ s.student_phone }}</td>
+                                <td>
+                                    {% if s.credentials_generated %}
+                                    <span class="badge badge-cred-yes">Yes</span>
+                                    {% else %}
+                                    <span class="badge badge-cred-no">No</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-nowrap">
+                                    <a href="{% url 'portal:student_edit' s.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit"><i class="bi bi-pencil"></i></a>
+                                    <form method="post" action="{% url 'portal:student_delete' s.pk %}" class="d-inline" onsubmit="return confirm('Delete {{ s.name }}?')">
+                                        {% csrf_token %}
+                                        <button class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="{% if not department and show_dept_filter %}10{% else %}9{% endif %}" class="text-center text-muted py-4">
+                                    No students found.
+                                    {% if department %}<button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-bs-toggle="modal" data-bs-target="#uploadStudentsModal">Upload Excel</button>{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if students %}
+                    <div class="p-3 border-top d-flex gap-2">
+                        <button type="submit" name="download" value="0" class="btn btn-sm btn-accent">Generate Credentials</button>
+                        <button type="submit" name="download" value="1" class="btn btn-sm btn-primary-custom"><i class="bi bi-download"></i> Generate & Download</button>
+                    </div>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="uploadStudentsModal" tabindex="-1" aria-labelledby="uploadStudentsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="uploadStudentsModalLabel">
+                    <i class="bi bi-file-earmark-excel me-1"></i> Upload Student Data
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Upload Excel/CSV with columns: Roll No, Name, Enrollment No, Branch, Batch, Mentor, Student Phone, Parents Contact
+                </p>
+                {% if not department and show_dept_filter %}
+                <form method="post" enctype="multipart/form-data" id="upload-students-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="upload_students">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Department *</label>
+                        <select name="department_id" class="form-select" required>
+                            <option value="">Select Department</option>
+                            {% for d in departments %}
+                            <option value="{{ d.pk }}" {% if department and department.pk == d.pk %}selected{% endif %}>{{ d.name }}{% if is_super %} ({{ d.semester.name }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Excel / CSV File</label>
+                        {{ upload_form.file }}
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100"><i class="bi bi-upload"></i> Upload & Import</button>
+                </form>
+                {% elif not department %}
+                <div class="alert alert-warning small mb-0">Select a department first using the filter above, then upload.</div>
+                {% else %}
+                <form method="post" enctype="multipart/form-data" id="upload-students-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="upload_students">
+                    <input type="hidden" name="department_id" value="{{ department.pk }}">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Excel / CSV File</label>
+                        {{ upload_form.file }}
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100"><i class="bi bi-upload"></i> Upload & Import</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    function openUploadModal() {
+        var el = document.getElementById('uploadStudentsModal');
+        if (el && window.bootstrap) {
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        }
+    }
+    if (window.location.hash === '#upload-students'{% if open_upload_modal %} || true{% endif %}) {
+        openUploadModal();
+    }
+    document.querySelectorAll('[data-bs-target="#uploadStudentsModal"]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            history.replaceState(null, '', window.location.pathname + window.location.search + '#upload-students');
+        });
+    });
+})();
+</script>
+{% endblock %}

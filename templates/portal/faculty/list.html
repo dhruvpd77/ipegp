@@ -1,0 +1,124 @@
+{% extends 'portal/base.html' %}
+{% block title %}Faculty Management{% endblock %}
+{% block content %}
+
+{% if department %}
+{% include 'portal/includes/section_header.html' with icon='person-badge' title='Faculty Management' subtitle=department.name %}
+{% else %}
+{% include 'portal/includes/section_header.html' with icon='person-badge' title='Faculty Management' %}
+{% endif %}
+<div class="page-actions">
+    <a href="{% url 'portal:upload_faculty' %}{% if department %}?department={{ department.pk }}{% endif %}" class="btn btn-sm btn-primary-custom">
+        <i class="bi bi-upload"></i> Upload Excel
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="filter-bar">
+    {% include 'portal/includes/department_filter.html' %}
+
+    <form method="get" class="d-flex align-items-center gap-2 flex-grow-1">
+        {% if show_dept_filter %}<input type="hidden" name="department" value="{% if department %}{{ department.pk }}{% else %}all{% endif %}">{% elif department %}<input type="hidden" name="department" value="{{ department.pk }}">{% endif %}
+        <label><i class="bi bi-search"></i></label>
+        <input type="text" name="q" class="form-control form-control-sm" placeholder="Search name, mentor code, email..." value="{{ search }}" style="max-width:280px;">
+        <button type="submit" class="btn btn-sm btn-primary-custom">Search</button>
+        {% if search %}
+        <a href="?{% if show_dept_filter %}department={% if department %}{{ department.pk }}{% else %}all{% endif %}{% elif department %}department={{ department.pk }}{% endif %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+        {% endif %}
+    </form>
+
+    <span class="badge bg-primary ms-auto">{{ faculty_list.count }} facult{{ faculty_list.count|pluralize:"y,ies" }}</span>
+</div>
+
+<div class="row g-4">
+    <!-- Add Faculty -->
+    <div class="col-lg-3">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-person-plus"></i> Add Faculty</div>
+            <div class="portal-card-body">
+                {% if not department %}
+                <div class="alert alert-warning small mb-0">Select a department first.</div>
+                {% else %}
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="add_faculty">
+                    <input type="hidden" name="department_id" value="{{ department.pk }}">
+                    <div class="mb-2"><label class="form-label">Name *</label>{{ form.name }}</div>
+                    <div class="mb-2"><label class="form-label">Mentor Code</label>{{ form.mentor_code }}</div>
+                    <div class="mb-2"><label class="form-label">Email</label>{{ form.email }}</div>
+                    <div class="mb-3"><label class="form-label">Phone</label>{{ form.phone }}</div>
+                    <button type="submit" class="btn btn-primary-custom w-100">Add Faculty</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Faculty Table -->
+    <div class="col-lg-9">
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-table"></i> Faculty List</div>
+            <div class="portal-card-body p-0">
+                <form method="post" action="{% url 'portal:generate_faculty_credentials' %}">
+                    {% csrf_token %}
+                    {% if department %}<input type="hidden" name="department_id" value="{{ department.pk }}">{% endif %}
+                    <div class="table-responsive">
+                        <table class="table table-custom table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" onclick="document.querySelectorAll('.fac-check').forEach(c=>c.checked=this.checked)"></th>
+                                    {% if not department and show_dept_filter %}<th>Dept</th>{% endif %}
+                                    <th>Name</th>
+                                    <th>Mentor Code</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                    <th>Credentials</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for f in faculty_list %}
+                            <tr>
+                                <td><input type="checkbox" class="fac-check" name="faculty_ids" value="{{ f.pk }}"></td>
+                                {% if not department and show_dept_filter %}<td><span class="badge bg-secondary">{{ f.department.name }}</span></td>{% endif %}
+                                <td class="fw-semibold">{{ f.name }}</td>
+                                <td>{{ f.mentor_code }}</td>
+                                <td>{{ f.email|default:"—" }}</td>
+                                <td>{{ f.phone|default:"—" }}</td>
+                                <td>
+                                    {% if f.credentials_generated %}
+                                    <span class="badge badge-cred-yes">Yes</span>
+                                    {% else %}
+                                    <span class="badge badge-cred-no">No</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-nowrap">
+                                    <a href="{% url 'portal:faculty_edit' f.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit"><i class="bi bi-pencil"></i></a>
+                                    <form method="post" action="{% url 'portal:faculty_delete' f.pk %}" class="d-inline" onsubmit="return confirm('Delete {{ f.name }}?')">
+                                        {% csrf_token %}
+                                        <button class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="{% if not department and show_dept_filter %}8{% else %}7{% endif %}" class="text-center text-muted py-4">
+                                    No faculty found. Add manually or <a href="{% url 'portal:upload_faculty' %}">upload Excel</a>.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if faculty_list %}
+                    <div class="p-3 border-top d-flex gap-2">
+                        <button type="submit" name="download" value="0" class="btn btn-sm btn-accent">Generate Credentials</button>
+                        <button type="submit" name="download" value="1" class="btn btn-sm btn-primary-custom"><i class="bi bi-download"></i> Generate & Download</button>
+                    </div>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

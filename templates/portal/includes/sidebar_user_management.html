@@ -1,0 +1,4 @@
+{% load portal_extras %}
+<a href="{% url 'portal:user_management' %}" class="sidebar-link {% if request.resolver_match.url_name|is_academic_mgmt_active %}active{% endif %}">
+    <i class="bi bi-grid-1x2"></i> Academic Management
+</a>

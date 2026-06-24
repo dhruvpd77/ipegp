@@ -1,0 +1,73 @@
+{% extends 'portal/base.html' %}
+{% block title %}Exam Sessions{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='clipboard-check' title='Exam Sessions' subtitle='Create and manage IPE / GP exam sessions' %}
+
+{% if show_dept_filter %}
+<div class="filter-bar mb-4">
+    {% include 'portal/includes/department_filter.html' %}
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-plus-circle"></i> Create Exam Session</div>
+            <div class="portal-card-body">
+                <form method="post" action="{% url 'portal:exam_session_create' %}">
+                    {% csrf_token %}
+                    {% if user.role != 'DEPARTMENT_ADMIN' %}
+                    <div class="mb-3">
+                        <label class="form-label">Department *</label>
+                        <select name="department_id" class="form-select" required>
+                            <option value="">Select Department</option>
+                            {% for d in departments %}
+                            <option value="{{ d.pk }}" {% if department and department.pk == d.pk %}selected{% endif %}>{{ d.name }}{% if is_super %} ({{ d.semester.name }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                    <div class="mb-3"><label class="form-label">Name</label>{{ form.name }}</div>
+                    <div class="mb-3"><label class="form-label">Type</label>{{ form.exam_type }}</div>
+                    <div class="mb-3"><label class="form-label">Subject</label>{{ form.subject }}</div>
+                    <div class="mb-3"><label class="form-label">Date</label>{{ form.date }}</div>
+                    <div class="mb-3 form-check">{{ form.is_active }} <label class="form-check-label">Active</label></div>
+                    <button type="submit" class="btn btn-primary-custom w-100">Create Session</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-list-check"></i> Exam Sessions</div>
+            <div class="portal-card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-custom table-hover mb-0">
+                        <thead><tr><th>Name</th><th>Type</th><th>Subject</th><th>Department</th><th>Date</th><th>Status</th><th></th></tr></thead>
+                        <tbody>
+                        {% for s in sessions %}
+                        <tr>
+                            <td class="fw-semibold">{{ s.name }}</td>
+                            <td><span class="badge {% if s.exam_type == 'IPE' %}badge-ipe{% else %}badge-gp{% endif %}">{{ s.exam_type }}</span></td>
+                            <td>{{ s.subject.name }}</td>
+                            <td>{{ s.department.name }}</td>
+                            <td>{{ s.date|default:"—" }}</td>
+                            <td><span class="badge {% if s.is_active %}bg-success{% else %}bg-secondary{% endif %}">{{ s.is_active|yesno:"Active,Inactive" }}</span></td>
+                            <td>
+                                <form method="post" action="{% url 'portal:exam_session_delete' s.pk %}" class="d-inline" onsubmit="return confirm('Delete this exam session?')">
+                                    {% csrf_token %}<button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-4">No exam sessions.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

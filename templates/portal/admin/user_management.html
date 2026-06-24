@@ -1,0 +1,64 @@
+{% extends 'portal/base.html' %}
+{% load static %}
+{% block title %}Academic Management{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/user-management.css' %}?v=3">
+{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='grid-1x2' title='Academic Management' subtitle='Students, faculty, subjects, assignments, syllabus and papers' %}
+
+{% if show_dept_filter %}
+<div class="filter-bar mb-4 flex-wrap">
+    {% include 'portal/includes/department_filter.html' %}
+</div>
+{% endif %}
+
+<div class="um-grid">
+    <a href="{% url 'portal:student_list' %}{% if department %}?department={{ department.pk }}{% endif %}" class="um-card">
+        <div class="um-card-icon"><i class="bi bi-people"></i></div>
+        <div class="um-card-body">
+            <h3 class="um-card-title">Students</h3>
+            <p class="um-card-desc">Add, upload, export and manage student records, batches and credentials.</p>
+        </div>
+        <i class="bi bi-chevron-right um-card-arrow"></i>
+    </a>
+
+    <a href="{% url 'portal:faculty_list' %}{% if department %}?department={{ department.pk }}{% endif %}" class="um-card">
+        <div class="um-card-icon"><i class="bi bi-person-badge"></i></div>
+        <div class="um-card-body">
+            <h3 class="um-card-title">Faculty</h3>
+            <p class="um-card-desc">Manage departmental faculty, mentor codes and login credentials.</p>
+        </div>
+        <i class="bi bi-chevron-right um-card-arrow"></i>
+    </a>
+
+    <a href="{% url 'portal:subject_list' %}{% if department %}?department={{ department.pk }}{% endif %}" class="um-card">
+        <div class="um-card-icon"><i class="bi bi-book"></i></div>
+        <div class="um-card-body">
+            <h3 class="um-card-title">Subjects</h3>
+            <p class="um-card-desc">Create and manage IPE/GP subjects for your department or semester.</p>
+        </div>
+        <i class="bi bi-chevron-right um-card-arrow"></i>
+    </a>
+
+    <a href="{% url 'portal:assigned_subjects' %}{% if department %}?department={{ department.pk }}{% endif %}" class="um-card">
+        <div class="um-card-icon"><i class="bi bi-person-workspace"></i></div>
+        <div class="um-card-body">
+            <h3 class="um-card-title">Assigned Subjects</h3>
+            <p class="um-card-desc">Assign faculty mentors to subjects per batch division.</p>
+        </div>
+        <i class="bi bi-chevron-right um-card-arrow"></i>
+    </a>
+
+    <a href="{% url 'portal:syllabus_papers_manage' %}{% if department %}?department={{ department.pk }}{% endif %}" class="um-card">
+        <div class="um-card-icon"><i class="bi bi-journal-text"></i></div>
+        <div class="um-card-body">
+            <h3 class="um-card-title">Syllabus &amp; Papers</h3>
+            <p class="um-card-desc">Upload syllabus documents and phase-wise question papers for faculty and examiners.</p>
+        </div>
+        <i class="bi bi-chevron-right um-card-arrow"></i>
+    </a>
+</div>
+
+{% endblock %}

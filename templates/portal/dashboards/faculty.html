@@ -1,0 +1,226 @@
+{% extends 'portal/base.html' %}
+
+{% load static %}
+
+{% block title %}Faculty Dashboard{% endblock %}
+
+{% block extra_css %}
+
+<link rel="stylesheet" href="{% static 'css/faculty-portal.css' %}?v=3">
+
+{% endblock %}
+
+{% block content %}
+
+
+
+<div class="fac-page">
+
+
+
+    <section class="fac-hero">
+
+        <div class="fac-hero-inner">
+
+            <div class="fac-hero-left">
+
+                <div class="fac-hero-icon"><i class="bi bi-person-badge"></i></div>
+
+                <div class="fac-hero-text">
+
+                    <div class="fac-hero-label">Faculty Portal</div>
+
+                    <h1 class="fac-hero-title">{{ faculty.name }}</h1>
+
+                    <p class="fac-hero-sub">
+
+                        {% if faculty.mentor_code %}{{ faculty.mentor_code }} · {% endif %}{{ department.name }}
+
+                        {% if faculty.is_external %} · External Examiner{% endif %}
+
+                    </p>
+
+                </div>
+
+            </div>
+
+            <div class="fac-hero-tag">IPE / GP Portal</div>
+
+        </div>
+
+    </section>
+
+
+
+    <div class="fac-stats">
+
+        <div class="fac-stat">
+
+            <div class="fac-stat-num">{{ duty_count }}</div>
+
+            <div class="fac-stat-label">Assigned Duties</div>
+
+        </div>
+
+        <div class="fac-stat">
+
+            <div class="fac-stat-num">{{ exam_sessions.count }}</div>
+
+            <div class="fac-stat-label">Active Exam Sessions</div>
+
+        </div>
+
+        <div class="fac-stat">
+
+            <div class="fac-stat-num">{{ department.name }}</div>
+
+            <div class="fac-stat-label">Department</div>
+
+        </div>
+
+    </div>
+
+
+
+    <div class="fac-section-title">Quick Access</div>
+
+    <div class="fac-nav-grid">
+
+        <a href="{% url 'portal:mark_entry_list' %}" class="fac-nav-card">
+
+            <div class="fac-nav-icon"><i class="bi bi-calendar-check"></i></div>
+
+            <div class="fac-nav-body">
+
+                <div class="fac-nav-title">My Duties</div>
+
+                <p class="fac-nav-desc">View assigned duties and enter marks</p>
+
+            </div>
+
+            <i class="bi bi-chevron-right fac-nav-arrow"></i>
+
+        </a>
+
+        <a href="{% url 'portal:faculty_submissions' %}" class="fac-nav-card">
+
+            <div class="fac-nav-icon"><i class="bi bi-inbox"></i></div>
+
+            <div class="fac-nav-body">
+
+                <div class="fac-nav-title">Submissions</div>
+
+                <p class="fac-nav-desc">Review GP project submissions</p>
+
+            </div>
+
+            <i class="bi bi-chevron-right fac-nav-arrow"></i>
+
+        </a>
+
+        <a href="{% url 'portal:faculty_syllabus' %}" class="fac-nav-card">
+
+            <div class="fac-nav-icon"><i class="bi bi-journal-text"></i></div>
+
+            <div class="fac-nav-body">
+
+                <div class="fac-nav-title">Syllabus</div>
+
+                <p class="fac-nav-desc">View subject syllabus documents</p>
+
+            </div>
+
+            <i class="bi bi-chevron-right fac-nav-arrow"></i>
+
+        </a>
+
+        <a href="{% url 'portal:faculty_papers' %}" class="fac-nav-card">
+
+            <div class="fac-nav-icon"><i class="bi bi-file-earmark-word"></i></div>
+
+            <div class="fac-nav-body">
+
+                <div class="fac-nav-title">Question Papers</div>
+
+                <p class="fac-nav-desc">Access IPE/GP question papers</p>
+
+            </div>
+
+            <i class="bi bi-chevron-right fac-nav-arrow"></i>
+
+        </a>
+
+    </div>
+
+
+
+    {% if exam_sessions %}
+
+    <div class="fac-section-title">Active Exam Sessions</div>
+
+    <div class="fac-panel">
+
+        <div class="fac-panel-header"><i class="bi bi-clipboard-check"></i> Exam Sessions</div>
+
+        <div class="fac-panel-body">
+
+            <div class="table-responsive">
+
+                <table class="fac-table">
+
+                    <thead>
+
+                        <tr>
+
+                            <th>Exam</th>
+
+                            <th>Type</th>
+
+                            <th>Subject</th>
+
+                            <th>Date</th>
+
+                            <th>Action</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                    {% for ex in exam_sessions %}
+
+                    <tr>
+
+                        <td class="fw-semibold">{{ ex.name }}</td>
+
+                        <td><span class="fac-duty-type">{{ ex.exam_type }}</span></td>
+
+                        <td>{{ ex.subject.name }}</td>
+
+                        <td>{{ ex.date|default:"—" }}</td>
+
+                        <td><a href="{% url 'portal:mark_entry' ex.pk %}" class="btn btn-primary-custom">Enter Marks</a></td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    {% endif %}
+
+
+
+</div>
+
+{% endblock %}
+

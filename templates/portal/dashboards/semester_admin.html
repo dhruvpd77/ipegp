@@ -1,0 +1,242 @@
+{% extends 'portal/base.html' %}
+{% block title %}Semester Admin Dashboard{% endblock %}
+{% block content %}
+
+{% if semester %}
+{% include 'portal/includes/section_header.html' with icon='speedometer2' title='Semester Admin Dashboard' subtitle=semester.name %}
+{% else %}
+{% include 'portal/includes/section_header.html' with icon='speedometer2' title='Semester Admin Dashboard' %}
+{% endif %}
+
+{% include 'portal/includes/dashboard_contact.html' %}
+
+{% if semester %}
+<div class="portal-card mb-4">
+    <div class="portal-card-body d-flex flex-wrap align-items-center justify-content-between gap-3 py-3">
+        <div>
+            <div class="small text-muted text-uppercase fw-semibold mb-1">Semester Status</div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge {% if semester.is_active %}bg-success{% else %}bg-secondary{% endif %} fs-6">
+                    {{ semester.is_active|yesno:"Active,Inactive" }}
+                </span>
+                <span class="text-muted">{{ semester.name }} · {{ semester.academic_year }}</span>
+            </div>
+            {% if not semester.is_active %}
+            <p class="small text-muted mb-0 mt-2">While inactive, students and faculty cannot access portal data.</p>
+            {% endif %}
+        </div>
+        {% include 'portal/includes/semester_status_toggle.html' with sem=semester %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Department filter -->
+{% if show_dept_filter %}
+<div class="filter-bar mb-4">
+    {% include 'portal/includes/department_filter.html' %}
+    <span class="text-muted small ms-auto">
+        {% if department %}{{ department.name }}{% else %}All departments in {{ semester.name }}{% endif %}
+    </span>
+</div>
+{% endif %}
+
+<!-- Stats row -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="dash-stat-card">
+            <div class="dash-stat-icon blue"><i class="bi bi-people"></i></div>
+            <div>
+                <div class="dash-stat-num">{{ student_count }}</div>
+                <div class="dash-stat-label">Students{% if batch_filter %} ({{ batch_filter }}){% endif %}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="dash-stat-card">
+            <div class="dash-stat-icon green"><i class="bi bi-person-badge"></i></div>
+            <div>
+                <div class="dash-stat-num">{{ faculty_count }}</div>
+                <div class="dash-stat-label">Faculty</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="dash-stat-card">
+            <div class="dash-stat-icon orange"><i class="bi bi-inbox"></i></div>
+            <div>
+                <div class="dash-stat-num">{{ submission_count }}</div>
+                <div class="dash-stat-label">GP Submissions</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="dash-stat-card">
+            <div class="dash-stat-icon blue"><i class="bi bi-building"></i></div>
+            <div>
+                <div class="dash-stat-num">{{ departments.count }}</div>
+                <div class="dash-stat-label">Departments</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter + quick actions -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-8">
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-lightning"></i> Quick Actions</div>
+            <div class="portal-card-body">
+                <div class="row g-2">
+                    <div class="col-md-4 col-6">
+                        <a href="{% url 'portal:student_list' %}?department={% if department %}{{ department.pk }}{% else %}all{% endif %}" class="dash-action-btn">
+                            <i class="bi bi-people"></i> Manage Students
+                        </a>
+                    </div>
+                    <div class="col-md-4 col-6">
+                        <a href="{% url 'portal:student_list' %}{% if department %}?department={{ department.pk }}{% endif %}#upload-students" class="dash-action-btn">
+                            <i class="bi bi-upload"></i> Upload Students
+                        </a>
+                    </div>
+                    <div class="col-md-4 col-6">
+                        <a href="{% url 'portal:faculty_list' %}?department={% if department %}{{ department.pk }}{% else %}all{% endif %}" class="dash-action-btn">
+                            <i class="bi bi-person-badge"></i> Manage Faculty
+                        </a>
+                    </div>
+                    <div class="col-md-4 col-6">
+                        <a href="{% url 'portal:department_list' %}" class="dash-action-btn">
+                            <i class="bi bi-building"></i> Departments
+                        </a>
+                    </div>
+                    <div class="col-md-4 col-6">
+                        <a href="{% url 'portal:attendance_sheets' %}?department={% if department %}{{ department.pk }}{% else %}all{% endif %}" class="dash-action-btn">
+                            <i class="bi bi-file-earmark-spreadsheet"></i> Attendance Sheets
+                        </a>
+                    </div>
+                    <div class="col-md-4 col-6">
+                        <a href="{% url 'portal:subject_list' %}" class="dash-action-btn">
+                            <i class="bi bi-book"></i> Subjects
+                        </a>
+                    </div>
+                    <div class="col-md-4 col-6">
+                        <a href="{% url 'portal:form_template_list' %}" class="dash-action-btn">
+                            <i class="bi bi-file-earmark-text"></i> Form Templates
+                        </a>
+                    </div>
+                    <div class="col-md-4 col-6">
+                        <a href="{% url 'portal:exam_session_list' %}" class="dash-action-btn">
+                            <i class="bi bi-clipboard-check"></i> Exams
+                        </a>
+                    </div>
+                    <div class="col-md-4 col-6">
+                        <a href="{% url 'portal:view_submissions' %}?department={% if department %}{{ department.pk }}{% else %}all{% endif %}" class="dash-action-btn">
+                            <i class="bi bi-inbox"></i> Submissions
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="portal-card h-100">
+            <div class="portal-card-header"><i class="bi bi-funnel"></i> Filter by Batch</div>
+            <div class="portal-card-body">
+                <form method="get">
+                    {% if department %}<input type="hidden" name="department" value="{{ department.pk }}">{% else %}<input type="hidden" name="department" value="all">{% endif %}
+                    <select name="batch" class="form-select" onchange="this.form.submit()">
+                        <option value="">All Batches</option>
+                        {% for b in batches %}
+                        <option value="{{ b }}" {% if batch_filter == b %}selected{% endif %}>{{ b }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+                {% if department %}
+                <div class="mt-3">
+                    <form method="post" action="{% url 'portal:generate_student_credentials' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="department_id" value="{{ department.pk }}">
+                        <input type="hidden" name="batch" value="{{ batch_filter }}">
+                        <button type="submit" name="download" value="1" class="btn btn-accent btn-sm w-100">
+                            <i class="bi bi-download"></i> Generate & Download Credentials
+                        </button>
+                    </form>
+                </div>
+                {% else %}
+                <p class="text-muted small mt-3 mb-0">Select a department to generate credentials.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Departments overview -->
+<div class="portal-card mb-4">
+    <div class="portal-card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-building"></i> Departments</span>
+        <a href="{% url 'portal:department_list' %}" class="btn btn-sm btn-outline-light">Manage</a>
+    </div>
+    <div class="portal-card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-custom table-hover table-sm mb-0">
+                <thead><tr><th>Department</th><th>Code</th><th>Students</th><th>Faculty</th><th>Actions</th></tr></thead>
+                <tbody>
+                {% for dept in departments %}
+                <tr>
+                    <td class="fw-semibold">{{ dept.name }}</td>
+                    <td>{{ dept.code }}</td>
+                    <td>{{ dept.students.count }}</td>
+                    <td>{{ dept.faculty_members.count }}</td>
+                    <td>
+                        <a href="{% url 'portal:student_list' %}?department={{ dept.pk }}" class="btn btn-sm btn-outline-primary">Students</a>
+                        <a href="{% url 'portal:create_department_admin' dept.pk %}" class="btn btn-sm btn-outline-secondary">+ Admin</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted py-3">No departments yet. <a href="{% url 'portal:department_list' %}">Create one</a></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Recent students -->
+<div class="portal-card">
+    <div class="portal-card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-table"></i> Recent Students</span>
+        <a href="{% url 'portal:student_list' %}?department={% if department %}{{ department.pk }}{% else %}all{% endif %}{% if batch_filter %}&batch={{ batch_filter }}{% endif %}" class="btn btn-sm btn-outline-light">View All {{ student_count }}</a>
+    </div>
+    <div class="portal-card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-custom table-hover table-sm mb-0">
+                <thead>
+                    <tr>
+                        {% if not department %}<th>Dept</th>{% endif %}
+                        <th>Roll</th><th>Name</th><th>Enrollment</th><th>Batch</th><th>Mentor</th><th>Credentials</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for s in recent_students %}
+                <tr>
+                    {% if not department %}<td><span class="badge bg-secondary">{{ s.department.name }}</span></td>{% endif %}
+                    <td>{{ s.roll_no }}</td>
+                    <td class="fw-semibold">{{ s.name }}</td>
+                    <td>{{ s.enrollment_no }}</td>
+                    <td><span class="badge bg-primary">{{ s.batch }}</span></td>
+                    <td>{{ s.mentor }}</td>
+                    <td>
+                        {% if s.credentials_generated %}
+                        <span class="badge badge-cred-yes">Yes</span>
+                        {% else %}
+                        <span class="badge badge-cred-no">No</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="{% if department %}6{% else %}7{% endif %}" class="text-center text-muted py-3">No students. <a href="{% url 'portal:student_list' %}#upload-students">Upload Excel</a></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

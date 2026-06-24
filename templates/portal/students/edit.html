@@ -1,0 +1,31 @@
+{% extends 'portal/base.html' %}
+{% block title %}Edit Student{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='pencil-square' title='Edit Student' subtitle=student.name %}
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-pencil"></i> Edit Student: {{ student.name }}</div>
+            <div class="portal-card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3"><label class="form-label">Roll No</label>{{ form.roll_no }}</div>
+                    <div class="mb-3"><label class="form-label">Name</label>{{ form.name }}</div>
+                    <div class="mb-3"><label class="form-label">Enrollment No</label>{{ form.enrollment_no }}</div>
+                    <div class="mb-3"><label class="form-label">Branch</label>{{ form.branch }}</div>
+                    <div class="mb-3"><label class="form-label">Batch</label>{{ form.batch }}</div>
+                    <div class="mb-3"><label class="form-label">Mentor</label>{{ form.mentor }}</div>
+                    <div class="mb-3"><label class="form-label">Phone</label>{{ form.student_phone }}</div>
+                    <div class="mb-3"><label class="form-label">Parent Contact</label>{{ form.parent_contact }}</div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary-custom">Save Changes</button>
+                        <a href="{% url 'portal:student_list' %}?department={{ student.department.pk }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends 'portal/base.html' %}
+{% block title %}Upload Students{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='upload' title='Upload Student Data' subtitle='Import students from Excel or CSV' %}
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-file-earmark-excel"></i> Import File</div>
+            <div class="portal-card-body">
+                <p class="text-muted small mb-4">
+                    Upload Excel/CSV with columns: Roll No, Name, Enrollment No, Branch, Batch, Mentor, Student Phone, Parents Contact
+                </p>
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    {% if show_dept_filter %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Department *</label>
+                        <select name="department_id" class="form-select" required>
+                            <option value="">Select Department</option>
+                            {% for d in departments %}
+                            <option value="{{ d.pk }}" {% if department and department.pk == d.pk %}selected{% endif %}>{{ d.name }}{% if is_super %} ({{ d.semester.name }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Excel / CSV File</label>
+                        {{ form.file }}
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100"><i class="bi bi-upload"></i> Upload & Import</button>
+                </form>
+                <div class="alert alert-light border small mt-4 mb-0">
+                    <strong>Expected columns:</strong> Roll No, Name, Enrollment No, Branch, Batch, Mentor, Student Phone, Parents Contact
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
