@@ -207,23 +207,27 @@ def _autofit_gp_row_heights(ws, name_col, header_row, data_start, data_end, note
         )
 
 
-def _apply_gp_print_setup(ws, last_col, last_row):
-    """Landscape A4 print — match official GP attendance sheet (wide cols, one page)."""
+def _apply_print_setup(ws, last_col, last_row, landscape=True):
+    """A4 print — fit entire sheet to one page for hard-copy printing."""
     from openpyxl.worksheet.page import PageMargins
 
     last_letter = get_column_letter(last_col)
     ws.print_area = f'A1:{last_letter}{last_row}'
-    ws.page_setup.orientation = 'landscape'
+    ws.page_setup.orientation = 'landscape' if landscape else 'portrait'
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 1
     ws.page_setup.scale = None
     ws.page_margins = PageMargins(
-        left=0.25, right=0.25, top=0.35, bottom=0.35, header=0.15, footer=0.15,
+        left=0.2, right=0.2, top=0.25, bottom=0.25, header=0.1, footer=0.1,
     )
     ws.print_options.horizontalCentered = True
     ws.print_options.verticalCentered = False
+
+
+def _apply_gp_print_setup(ws, last_col, last_row):
+    _apply_print_setup(ws, last_col, last_row, landscape=True)
 
 
 def _build_ipe_sheet(ws, students, batch_name, semester_label, department_label,
@@ -260,6 +264,17 @@ def _build_ipe_sheet(ws, students, batch_name, semester_label, department_label,
         _merge_and_style(ws, merge_range, text, fill=fill)
 
     data_start = 11
+    student_count = len(students)
+    if student_count > 32:
+        data_row_height = 12
+        header_block_height = 18
+    elif student_count > 24:
+        data_row_height = 13
+        header_block_height = 20
+    else:
+        data_row_height = 15
+        header_block_height = 22
+
     for idx, stu in enumerate(students, start=1):
         row = data_start + idx - 1
         ws.merge_cells(f'D{row}:G{row}')
@@ -274,27 +289,27 @@ def _build_ipe_sheet(ws, students, batch_name, semester_label, department_label,
         _style_cell(ws.cell(row, 8, stu.roll_no), alignment=ALIGN_CENTER)
         for c in range(9, 12):
             _style_cell(ws.cell(row, c), alignment=ALIGN_CENTER)
+        ws.row_dimensions[row].height = data_row_height
 
-    footer_start = data_start + len(students) + 1
+    footer_start = data_start + student_count
     footers = [
         'NAME OF EXTERNAL EXAMINER: ',
         'SIGNATURE OF EXTERNAL EXAMINER:',
-        '',
         'NAME OF INTERNAL EXAMINER:                     ',
         'SIGNATURE OF INTERNAL EXAMINER:',
     ]
+    footer_end = footer_start + len(footers) - 1
     for i, text in enumerate(footers):
         row = footer_start + i
-        if text:
-            _merge_and_style(ws, f'A{row}:K{row}', text, alignment=ALIGN_LEFT)
-        else:
-            for c in range(1, IPE_LAST_COL + 1):
-                _style_cell(ws.cell(row, c))
+        _merge_and_style(ws, f'A{row}:K{row}', text, alignment=ALIGN_LEFT)
+        ws.row_dimensions[row].height = 14
 
     for r in range(1, 5):
-        ws.row_dimensions[r].height = 22
-    ws.row_dimensions[9].height = 30
-    ws.row_dimensions[10].height = 30
+        ws.row_dimensions[r].height = header_block_height
+    ws.row_dimensions[9].height = 26
+    ws.row_dimensions[10].height = 26
+
+    _apply_print_setup(ws, IPE_LAST_COL, footer_end, landscape=True)
 
 
 def _gp_extra_columns(template):
@@ -476,7 +491,7 @@ def _build_gp_attendance_sheet(ws, groups, batch_name, group_start_num,
             cell = ws.cell(row=end_row, column=col)
             cell.border = Border(left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THICK_SIDE)
 
-    footer_start = data_end + 2 if data_end >= data_start else data_start + 1
+    footer_start = data_end + 1 if data_end >= data_start else data_start
     footers = [
         'NAME OF EXTERNAL EXAMINER: ',
         'SIGNATURE OF EXTERNAL EXAMINER:',
