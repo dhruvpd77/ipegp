@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Sign In{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/login.css' %}?v=15">
+<link rel="stylesheet" href="{% static 'css/login.css' %}?v=17">
 {% endblock %}
 {% block public_content %}
 <div class="login-page">
@@ -45,14 +45,20 @@
                     <div class="login-card-brand-bottom">
                         <span class="login-brand-tag">LJIET · LJ University</span>
                         <h1>IPE / GP Portal</h1>
-                        <p>Internal Practical Examination &amp; Group Project management for students, faculty and administrators.</p>
+                        <p class="login-mobile-tagline">Your gateway to IPE &amp; Group Projects</p>
+                        <p class="login-brand-desc">Internal Practical Examination &amp; Group Project management for students, faculty and administrators.</p>
                     </div>
                 </div>
             </div>
 
             <div class="login-card-form">
-                <h2>Sign In</h2>
-                <p class="login-card-form-sub">Enter your assigned username and password to continue.</p>
+                <div class="login-form-header">
+                    <div class="login-form-icon" aria-hidden="true"><i class="bi bi-shield-lock"></i></div>
+                    <div>
+                        <h2>Sign In</h2>
+                        <p class="login-card-form-sub">Enter your assigned username and password to continue.</p>
+                    </div>
+                </div>
 
                 <form method="post" class="login-form">
                     {% csrf_token %}
@@ -86,6 +92,7 @@
                         <i class="bi bi-key-fill"></i> Change Password
                     </a>
                 </div>
+                <p class="login-mobile-footer">LJ Institute of Engineering &amp; Technology, Ahmedabad</p>
             </div>
         </div>
     </main>
