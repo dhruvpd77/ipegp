@@ -930,12 +930,28 @@ def student_delete(request, pk):
     return redirect(_student_redirect(request, dept))
 
 
+def _resolve_student_password(post):
+    """Return (password_or_none, error_message). None password means unique random per student."""
+    mode = post.get('password_mode', 'random')
+    if mode == 'default':
+        default_password = post.get('default_password', '').strip()
+        if not default_password:
+            return None, 'Please enter a default password.'
+        return default_password, None
+    return None, None
+
+
 @role_required(User.Role.DEPARTMENT_ADMIN, User.Role.SEMESTER_ADMIN, User.Role.SUPER_ADMIN)
 def generate_student_credentials(request):
     ctx = get_user_context(request.user)
     dept = resolve_department(request.user, ctx, request)
     student_ids = request.POST.getlist('student_ids')
     batch = request.POST.get('batch', '')
+
+    shared_password, password_error = _resolve_student_password(request.POST)
+    if password_error:
+        messages.error(request, password_error)
+        return redirect(_student_redirect(request, dept))
 
     students = students_in_scope(request.user, ctx, dept)
     if student_ids:
@@ -946,7 +962,7 @@ def generate_student_credentials(request):
     creds = []
     for stu in students:
         username = stu.enrollment_no
-        password = Student.generate_password()
+        password = shared_password or Student.generate_password()
         if stu.user:
             stu.user.set_password(password)
             stu.user.save()
@@ -968,7 +984,13 @@ def generate_student_credentials(request):
 
     if request.POST.get('download') == '1':
         return export_credentials_excel(creds, 'student_credentials.xlsx')
-    messages.success(request, f'Generated credentials for {len(creds)} students.')
+    if shared_password:
+        messages.success(
+            request,
+            f'Set default password for {len(creds)} students.',
+        )
+    else:
+        messages.success(request, f'Generated random credentials for {len(creds)} students.')
     return redirect(_student_redirect(request, dept))
 
 
@@ -1890,8 +1912,13 @@ def project_case_list(request):
         messages.success(request, 'Case deleted.')
 
     cases = ProjectCase.objects.filter(semester=semester) if semester else ProjectCase.objects.none()
-    if request.user.role == User.Role.DEPARTMENT_ADMIN and ctx.get('department'):
-        cases = cases.filter(Q(department=ctx['department']) | Q(department__isnull=True))
+    scope_dept = None
+    if request.user.role == User.Role.DEPARTMENT_ADMIN:
+        scope_dept = ctx.get('department')
+    elif dept:
+        scope_dept = dept
+    if scope_dept:
+        cases = cases.filter(Q(department=scope_dept) | Q(department__isnull=True))
 
     return render(request, 'portal/forms/project_cases.html', {
         'cases': cases,

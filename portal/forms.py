@@ -375,7 +375,7 @@ class ProjectCaseForm(forms.ModelForm):
         model = ProjectCase
         fields = ['name', 'is_active']
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Case A - Web Application'}),
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Case 1'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 

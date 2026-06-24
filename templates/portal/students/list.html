@@ -140,8 +140,8 @@
                     </div>
                     {% if students %}
                     <div class="p-3 border-top d-flex gap-2">
-                        <button type="submit" name="download" value="0" class="btn btn-sm btn-accent">Generate Credentials</button>
-                        <button type="submit" name="download" value="1" class="btn btn-sm btn-primary-custom"><i class="bi bi-download"></i> Generate & Download</button>
+                        <button type="button" class="btn btn-sm btn-accent" data-generate-creds data-download="0">Generate Credentials</button>
+                        <button type="button" class="btn btn-sm btn-primary-custom" data-generate-creds data-download="1"><i class="bi bi-download"></i> Generate & Download</button>
                     </div>
                     {% endif %}
                 </form>
@@ -149,6 +149,8 @@
         </div>
     </div>
 </div>
+
+{% include 'portal/includes/student_credential_modal.html' %}
 
 <div class="modal fade" id="uploadStudentsModal" tabindex="-1" aria-labelledby="uploadStudentsModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">

@@ -9,6 +9,7 @@ USER_MANAGEMENT_URLS = frozenset({
     'subject_list', 'subject_create', 'subject_edit',
     'assigned_subjects',
     'syllabus_papers_manage', 'syllabus_delete', 'paper_delete',
+    'project_case_list',
 })
 
 

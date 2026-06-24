@@ -155,7 +155,7 @@
                         {% csrf_token %}
                         <input type="hidden" name="department_id" value="{{ department.pk }}">
                         <input type="hidden" name="batch" value="{{ batch_filter }}">
-                        <button type="submit" name="download" value="1" class="btn btn-accent btn-sm w-100">
+                        <button type="button" class="btn btn-accent btn-sm w-100" data-generate-creds data-download="1">
                             <i class="bi bi-download"></i> Generate & Download Credentials
                         </button>
                     </form>
@@ -239,4 +239,6 @@
         </div>
     </div>
 </div>
+
+{% include 'portal/includes/student_credential_modal.html' %}
 {% endblock %}

@@ -1,23 +1,32 @@
 {% extends 'portal/base.html' %}
-{% block title %}Project Cases{% endblock %}
+{% block title %}Case Management{% endblock %}
 {% block content %}
 
-{% include 'portal/includes/section_header.html' with icon='list-check' title='GP Project Cases' subtitle='Cases students select when submitting GP projects' %}
+{% include 'portal/includes/section_header.html' with icon='list-check' title='Case Management' subtitle='Define GP project cases shown in the student login project form dropdown' %}
 
 <div class="page-actions">
-    <a href="{% url 'portal:form_template_list' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Form Templates</a>
+    <a href="{% url 'portal:user_management' %}{% if department %}?department={{ department.pk }}{% endif %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Academic Management
+    </a>
 </div>
+
+{% if show_dept_filter %}
+<div class="filter-bar mb-4 flex-wrap">
+    {% include 'portal/includes/department_filter.html' %}
+</div>
+{% endif %}
 
 <div class="row g-4">
     <div class="col-lg-4">
         <div class="portal-card form-panel">
             <div class="portal-card-header"><i class="bi bi-plus-circle"></i> Add Case</div>
             <div class="portal-card-body">
+                <p class="text-muted small">Enter case names exactly as students should see them, e.g. <strong>Case 1</strong>, <strong>Case 2</strong>, <strong>Case 3</strong>.</p>
                 <form method="post">
                     {% csrf_token %}
                     <input type="hidden" name="form_type" value="add_case">
                     <div class="mb-3"><label class="form-label">Case Name *</label>{{ form.name }}</div>
-                    <div class="mb-3 form-check">{{ form.is_active }} <label class="form-check-label">Active</label></div>
+                    <div class="mb-3 form-check">{{ form.is_active }} <label class="form-check-label">Active (show in student dropdown)</label></div>
                     <button type="submit" class="btn btn-primary-custom w-100">Add Case</button>
                 </form>
             </div>
@@ -25,7 +34,10 @@
     </div>
     <div class="col-lg-8">
         <div class="portal-card">
-            <div class="portal-card-header"><i class="bi bi-table"></i> Case List</div>
+            <div class="portal-card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-table"></i> Case List</span>
+                {% if semester %}<span class="small opacity-75">{{ semester.name }}</span>{% endif %}
+            </div>
             <div class="portal-card-body p-0">
                 <table class="table table-custom table-hover mb-0">
                     <thead><tr><th>Case Name</th><th>Scope</th><th>Status</th><th>Actions</th></tr></thead>
@@ -36,14 +48,14 @@
                         <td>{% if c.department %}{{ c.department.name }}{% else %}All Departments{% endif %}</td>
                         <td><span class="badge {% if c.is_active %}bg-success{% else %}bg-secondary{% endif %}">{% if c.is_active %}Active{% else %}Inactive{% endif %}</span></td>
                         <td>
-                            <form method="post" class="d-inline" onsubmit="return confirm('Delete case?')">
+                            <form method="post" class="d-inline" onsubmit="return confirm('Delete case &quot;{{ c.name }}&quot;?')">
                                 {% csrf_token %}<input type="hidden" name="form_type" value="delete_case"><input type="hidden" name="case_id" value="{{ c.pk }}">
                                 <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
                             </form>
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="4" class="text-center text-muted py-4">No cases yet. Add cases for students to select.</td></tr>
+                    <tr><td colspan="4" class="text-center text-muted py-4">No cases yet. Add Case 1, Case 2, etc. for students to select on the GP project form.</td></tr>
                     {% endfor %}
                     </tbody>
                 </table>

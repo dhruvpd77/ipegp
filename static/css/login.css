@@ -1,81 +1,96 @@
-/* Login — centered card on light mesh background (LJU corporate) */
-
-body:has(.login-page) {
-    background: #eef2f7 !important;
-    margin: 0;
-    overflow-x: hidden;
-}
+/* ═══════════════════════════════════════════════════════════════
+   IPE/GP Portal — Corporate login (v14)
+   ═══════════════════════════════════════════════════════════════ */
 
 .login-page {
-    position: relative;
     min-height: 100vh;
-    min-height: 100dvh;
     display: flex;
     flex-direction: column;
-    background:
-        radial-gradient(ellipse 70% 55% at 15% 20%, rgba(37, 99, 235, 0.14) 0%, transparent 55%),
-        radial-gradient(ellipse 60% 50% at 85% 75%, rgba(219, 39, 119, 0.1) 0%, transparent 50%),
-        radial-gradient(ellipse 50% 40% at 50% 100%, rgba(30, 64, 175, 0.08) 0%, transparent 45%),
-        linear-gradient(160deg, #f8fafc 0%, #eef2f8 45%, #e8edf5 100%);
+    position: relative;
+    overflow: hidden;
+    background: #1e293b;
 }
 
-.login-page::before {
-    content: "";
+/* ─── Campus background ─── */
+.login-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.login-bg-photo {
     position: absolute;
     inset: 0;
-    pointer-events: none;
-    background-image:
-        radial-gradient(circle at 1px 1px, rgba(30, 58, 95, 0.07) 1px, transparent 0);
-    background-size: 28px 28px;
-    mask-image: radial-gradient(ellipse 85% 75% at 50% 45%, #000 20%, transparent 75%);
+    background: url('../images/login/clg-bg.jfif') center center / cover no-repeat;
+    transform: scale(1.02);
 }
 
-.login-page > * {
-    position: relative;
-    z-index: 1;
+.login-bg-overlay {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(160deg,
+            rgba(15, 23, 42, 0.82) 0%,
+            rgba(30, 41, 59, 0.72) 45%,
+            rgba(15, 23, 42, 0.85) 100%);
 }
 
-/* Top bar */
+/* ─── Top bar ─── */
 .login-page-topbar {
+    position: relative;
+    z-index: 10;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.85rem;
     padding: 0.7rem 1.75rem;
-    background: rgba(255, 255, 255, 0.82);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border-bottom: 1px solid rgba(30, 58, 95, 0.08);
-    color: #1e3a5f;
-    font-size: 0.88rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    flex-shrink: 0;
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.97);
+    border-bottom: 2px solid #cbd5e1;
+    box-shadow: 0 1px 8px rgba(15, 23, 42, 0.1);
 }
 
 .login-page-topbar-logo {
-    height: 30px;
+    height: 40px;
     width: auto;
-    max-width: 160px;
+    max-width: 210px;
     object-fit: contain;
     display: block;
 }
 
-.login-page-topbar-divider {
-    width: 1px;
-    height: 18px;
-    background: rgba(30, 58, 95, 0.15);
-    flex-shrink: 0;
+.login-page-topbar span:not(.login-page-topbar-divider):not(.login-topbar-pill) {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #1e293b;
+    letter-spacing: 0.01em;
 }
 
-/* Main area — center card */
+.login-page-topbar-divider {
+    width: 1px;
+    height: 22px;
+    background: #cbd5e1;
+}
+
+.login-topbar-pill {
+    margin-left: auto;
+    padding: 0.3rem 0.8rem;
+    border-radius: 0.25rem;
+    font-size: 0.72rem !important;
+    font-weight: 600 !important;
+    color: #475569 !important;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+}
+
+/* ─── Main layout ─── */
 .login-page-main {
     flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 2rem 1.25rem 2.5rem;
+    padding: 2rem 1.5rem 2.5rem;
+    position: relative;
+    z-index: 5;
 }
 
 .login-page-alerts {
@@ -84,65 +99,112 @@ body:has(.login-page) {
     margin-bottom: 1rem;
 }
 
-/* Split card */
+/* ─── Split card ─── */
 .login-card {
     display: flex;
     width: 100%;
     max-width: 900px;
     min-height: 480px;
-    border-radius: 1.15rem;
+    border-radius: 0.5rem;
     overflow: hidden;
+    background: #ffffff;
     box-shadow:
-        0 4px 6px rgba(30, 58, 95, 0.04),
-        0 20px 50px rgba(30, 58, 95, 0.12),
-        0 0 0 1px rgba(30, 58, 95, 0.06);
+        0 0 0 1px rgba(255, 255, 255, 0.15),
+        0 24px 48px rgba(0, 0, 0, 0.28);
+    position: relative;
 }
 
-/* Left panel — white brand strip for proper logo colors */
+.login-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: #1e293b;
+    z-index: 3;
+}
+
+/* ─── Left panel — corporate brand ─── */
 .login-card-brand {
     flex: 1;
-    background:
-        linear-gradient(180deg, #ffffff 0%, #f8fafc 55%, #f1f5f9 100%);
+    background: #f8fafc;
+    border-right: 1px solid #e2e8f0;
     display: flex;
     flex-direction: column;
-    align-items: center;
     justify-content: center;
-    gap: 2rem;
-    padding: 2.5rem 2rem;
-    text-align: center;
-    border-right: 1px solid #e2e8f0;
 }
 
-.login-card-brand-logos {
+.login-card-brand-content {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 1.75rem;
+    padding: 2.5rem 2rem;
+    text-align: center;
+}
+
+.login-logos-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
     width: 100%;
+    flex-wrap: wrap;
+}
+
+.login-logo-wrap {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-logo-wrap-ljiet {
+    padding: 0.65rem 0.85rem;
+    min-width: 130px;
 }
 
 .login-lju-logo {
-    width: 100%;
-    max-width: 270px;
-    height: auto;
+    width: auto;
+    height: 52px;
+    max-width: 200px;
     object-fit: contain;
     display: block;
 }
 
-.login-crest {
-    height: 100px;
+.login-ljiet-logo {
     width: auto;
+    height: 96px;
     max-width: 120px;
     object-fit: contain;
     display: block;
 }
 
+.login-brand-tag {
+    display: inline-block;
+    padding: 0.22rem 0.65rem;
+    margin-bottom: 0.55rem;
+    border-radius: 0.2rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #475569;
+    background: #e2e8f0;
+    border: 1px solid #cbd5e1;
+}
+
 .login-card-brand-bottom h1 {
     font-size: 1.35rem;
-    font-weight: 700;
-    color: #0f2744;
-    margin: 0 0 0.75rem;
-    letter-spacing: -0.01em;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 0.6rem;
+    letter-spacing: -0.02em;
 }
 
 .login-card-brand-bottom p {
@@ -155,11 +217,11 @@ body:has(.login-page) {
     margin-right: auto;
 }
 
-/* Right panel — form */
+/* ─── Right panel — form ─── */
 .login-card-form {
     flex: 1;
     background: #fff;
-    padding: 2.5rem 2.25rem;
+    padding: 2.5rem 2.35rem;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -167,7 +229,7 @@ body:has(.login-page) {
 
 .login-card-form h2 {
     font-size: 1.65rem;
-    font-weight: 700;
+    font-weight: 800;
     color: #0f172a;
     margin: 0 0 0.35rem;
     letter-spacing: -0.02em;
@@ -192,27 +254,48 @@ body:has(.login-page) {
     margin-bottom: 0.4rem;
 }
 
+.login-input-box {
+    position: relative;
+}
+
+.login-input-box > i {
+    position: absolute;
+    left: 0.85rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #64748b;
+    font-size: 1rem;
+    pointer-events: none;
+    z-index: 1;
+}
+
 .login-form-field .form-control,
 .login-form-field .form-control-lg {
     width: 100%;
-    padding: 0.65rem 0.9rem;
+    padding: 0.68rem 0.9rem;
     font-size: 0.92rem;
-    border: 1px solid #d1d5db;
-    border-radius: 0.5rem;
-    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.35rem;
+    background: #f8fafc;
     color: #0f172a;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.login-input-box .form-control,
+.login-input-box .form-control-lg {
+    padding-left: 2.45rem;
 }
 
 .login-form-field .form-control:focus,
 .login-form-field .form-control-lg:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    border-color: #1e293b;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(30, 41, 59, 0.1);
     outline: none;
 }
 
 .login-form-field .form-control::placeholder {
-    color: #9ca3af;
+    color: #94a3b8;
 }
 
 .login-form-error {
@@ -221,30 +304,29 @@ body:has(.login-page) {
     margin-top: 0.3rem;
 }
 
-/* Sign-in button */
 .login-btn-submit {
     width: 100%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    padding: 0.75rem 1.25rem;
+    padding: 0.78rem 1.25rem;
     margin-top: 0.35rem;
     border: none;
-    border-radius: 0.5rem;
-    background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+    border-radius: 0.35rem;
+    background: #1e293b;
     color: #fff;
     font-size: 0.95rem;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
-    box-shadow: 0 4px 14px rgba(5, 150, 105, 0.3);
-    transition: filter 0.15s, box-shadow 0.15s, transform 0.1s;
+    box-shadow: 0 4px 12px rgba(30, 41, 59, 0.25);
+    transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
 }
 
 .login-btn-submit:hover {
-    background: linear-gradient(180deg, #059669 0%, #047857 100%);
+    background: #0f172a;
     color: #fff;
-    box-shadow: 0 6px 18px rgba(5, 150, 105, 0.38);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.3);
 }
 
 .login-btn-submit:active {
@@ -254,41 +336,55 @@ body:has(.login-page) {
 .login-form-note {
     margin: 1.25rem 0 0.75rem;
     font-size: 0.78rem;
-    color: #9ca3af;
+    color: #94a3b8;
     text-align: center;
     line-height: 1.45;
+}
+
+.login-form-links {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
 }
 
 .login-link-pw {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.35rem;
+    gap: 0.4rem;
     width: 100%;
     font-size: 0.84rem;
     font-weight: 600;
-    color: #2563eb;
+    color: #1e293b;
     text-decoration: none;
-    padding: 0.35rem;
-    transition: color 0.15s;
+    padding: 0.5rem;
+    border-radius: 0.35rem;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    transition: background 0.15s;
 }
 
 .login-link-pw:hover {
-    color: #1d4ed8;
-    text-decoration: underline;
+    background: #e2e8f0;
+    color: #0f172a;
 }
 
 .login-link-ext {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
     text-align: center;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
+    font-weight: 600;
     color: #64748b;
     text-decoration: none;
-    margin-top: 0.5rem;
+    padding: 0.4rem;
+    transition: color 0.15s;
 }
 
 .login-link-ext:hover {
-    color: #2563eb;
+    color: #1e293b;
 }
 
 /* ─── Change password (public) ─── */
@@ -319,22 +415,27 @@ body:has(.login-page) {
     }
 
     .login-card-brand {
-        padding: 2rem 1.5rem 1.75rem;
         border-right: none;
         border-bottom: 1px solid #e2e8f0;
-        gap: 1.5rem;
+    }
+
+    .login-card-brand-content {
+        padding: 2rem 1.5rem 1.75rem;
+        gap: 1.35rem;
+    }
+
+    .login-logos-row {
+        gap: 1rem;
     }
 
     .login-lju-logo {
-        max-width: 220px;
+        height: 44px;
+        max-width: 170px;
     }
 
-    .login-crest {
-        height: 72px;
-    }
-
-    .login-card-brand-logos {
-        gap: 1.25rem;
+    .login-ljiet-logo {
+        height: 80px;
+        max-width: 100px;
     }
 
     .login-card-brand-bottom h1 {
@@ -352,6 +453,10 @@ body:has(.login-page) {
     .login-card-form h2 {
         font-size: 1.4rem;
     }
+
+    .login-topbar-pill {
+        display: none;
+    }
 }
 
 @media (max-width: 480px) {
@@ -363,24 +468,33 @@ body:has(.login-page) {
         padding: 1.5rem 1.25rem;
     }
 
-    .login-form-field .form-control,
-    .login-form-field .form-control-lg {
+    .login-input-box .form-control,
+    .login-input-box .form-control-lg {
+        font-size: 16px;
+        padding: 0.7rem 0.85rem 0.7rem 2.45rem;
+    }
+
+    .login-form-field > .form-control,
+    .login-form-field > .form-control-lg {
         font-size: 16px;
         padding: 0.7rem 0.85rem;
     }
 
     .login-page-topbar {
         padding: 0.55rem 1rem;
-        font-size: 0.82rem;
         gap: 0.5rem;
     }
 
     .login-page-topbar-logo {
-        height: 24px;
-        max-width: 120px;
+        height: 32px;
+        max-width: 160px;
     }
 
-    .login-page-topbar span:not(.login-page-topbar-divider) {
+    .login-page-topbar span:not(.login-page-topbar-divider):not(.login-topbar-pill) {
         font-size: 0.78rem;
+    }
+
+    .login-logos-row {
+        flex-direction: column;
     }
 }

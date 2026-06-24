@@ -2,14 +2,20 @@
 {% load static %}
 {% block title %}Sign In{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/login.css' %}?v=11">
+<link rel="stylesheet" href="{% static 'css/login.css' %}?v=14">
 {% endblock %}
 {% block public_content %}
 <div class="login-page">
+    <div class="login-bg" aria-hidden="true">
+        <div class="login-bg-photo"></div>
+        <div class="login-bg-overlay"></div>
+    </div>
+
     <header class="login-page-topbar">
         <img src="{% static 'images/lju-logo.png' %}" alt="LJ University" class="login-page-topbar-logo">
         <span class="login-page-topbar-divider"></span>
         <span>IPE/GP Portal</span>
+        <span class="login-topbar-pill">LJ University</span>
     </header>
 
     <main class="login-page-main">
@@ -25,19 +31,25 @@
         {% endif %}
 
         <div class="login-card">
-            <!-- Left: branding -->
             <div class="login-card-brand">
-                <div class="login-card-brand-logos">
-                    <img src="{% static 'images/lju-logo.png' %}" alt="LJ University" class="login-lju-logo">
-                    <img src="{% static 'images/ljiet-logo-sif.png' %}" alt="LJIET" class="login-crest">
-                </div>
-                <div class="login-card-brand-bottom">
-                    <h1>IPE/GP Portal</h1>
-                    <p>Secure access for students, faculty, and administrators to manage Internal Practical Examination and Group Project workflows.</p>
+                <div class="login-card-brand-content">
+                    <div class="login-logos-row">
+                        <div class="login-logo-wrap">
+                            <img src="{% static 'images/lju-logo.png' %}" alt="LJ University" class="login-lju-logo">
+                        </div>
+                        <div class="login-logo-wrap login-logo-wrap-ljiet">
+                            <img src="{% static 'images/ljiet-logo-sif.png' %}" alt="LJIET" class="login-ljiet-logo">
+                        </div>
+                    </div>
+
+                    <div class="login-card-brand-bottom">
+                        <span class="login-brand-tag">LJIET · LJ University</span>
+                        <h1>IPE / GP Portal</h1>
+                        <p>Internal Practical Examination &amp; Group Project management for students, faculty and administrators.</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Right: form -->
             <div class="login-card-form">
                 <h2>Sign In</h2>
                 <p class="login-card-form-sub">Enter your assigned username and password to continue.</p>
@@ -46,12 +58,18 @@
                     {% csrf_token %}
                     <div class="login-form-field">
                         <label for="{{ form.username.id_for_label }}">Username</label>
-                        {{ form.username }}
+                        <div class="login-input-box">
+                            <i class="bi bi-person"></i>
+                            {{ form.username }}
+                        </div>
                         {% if form.username.errors %}<div class="login-form-error">{{ form.username.errors }}</div>{% endif %}
                     </div>
                     <div class="login-form-field">
                         <label for="{{ form.password.id_for_label }}">Password</label>
-                        {{ form.password }}
+                        <div class="login-input-box">
+                            <i class="bi bi-lock"></i>
+                            {{ form.password }}
+                        </div>
                         {% if form.password.errors %}<div class="login-form-error">{{ form.password.errors }}</div>{% endif %}
                     </div>
                     {% if form.non_field_errors %}
@@ -63,12 +81,11 @@
                 </form>
 
                 <p class="login-form-note">Use the username and password given by your institute.</p>
-                <a href="{% url 'portal:change_password' %}" class="login-link-pw">
-                    <i class="bi bi-key"></i> Change Password
-                </a>
-                <a href="{% url 'portal:become_external' %}" class="login-link-ext">
-                    External Examiner Registration
-                </a>
+                <div class="login-form-links">
+                    <a href="{% url 'portal:change_password' %}" class="login-link-pw">
+                        <i class="bi bi-key-fill"></i> Change Password
+                    </a>
+                </div>
             </div>
         </div>
     </main>
