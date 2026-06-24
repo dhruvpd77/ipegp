@@ -38,6 +38,7 @@ from .gp_utils import (
     subjects_for_department, get_taken_titles_by_subject,
     parse_subject_selection,
     get_pending_gp_students,
+    _resolve_subject_entry_from_post,
     GENDER_CHOICES, YES_NO_CHOICES,
 )
 from .attendance_sheet import (
@@ -1994,15 +1995,21 @@ def _gp_student_context(student, editing_group=None, post_data=None):
         if repost_sel:
             initial_selection = repost_sel
             repost_ids = parse_subject_selection(repost_sel)
+            case_bundle = post_data.get('case_bundle', '').strip()
+            title_combined = post_data.get('title_combined', '').strip()
             bundle_entries = []
             for sid in repost_ids:
                 subj = next((s for s in subjects if s.pk == sid), None)
-                case_raw = post_data.get(f'case_{sid}', '').strip()
+                case_raw, title = _resolve_subject_entry_from_post(
+                    post_data, sid, subj,
+                    case_bundle=case_bundle,
+                    title_combined=title_combined,
+                )
                 bundle_entries.append({
                     'subject_id': sid,
                     'subject_name': subj.name if subj else '',
-                    'case_id': int(case_raw) if case_raw.isdigit() else None,
-                    'title': post_data.get(f'title_{sid}', '').strip(),
+                    'case_id': int(case_raw) if str(case_raw).isdigit() else None,
+                    'title': title,
                 })
         repost_members = []
         for mid in post_data.getlist('member_ids'):

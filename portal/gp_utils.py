@@ -404,11 +404,31 @@ def bundle_subject_entries_from_groups(groups):
             'subject_id': g.subject_id,
             'subject_name': g.subject.name if g.subject_id else '',
             'case_id': g.project_case_id,
+            'case_name': g.project_case.name if g.project_case_id else '',
             'title': g.name,
         }
         for g in groups
         if g.subject_id
     ]
+
+
+def gp_case_uses_combined_title(case):
+    """Case 1 — one shared project title for all subjects in a practical bundle."""
+    if not case:
+        return False
+    name = normalize_label(case.name).lower()
+    return bool(re.match(r'^case\s*1\b', name)) or name in ('case 1', 'case1')
+
+
+def _resolve_subject_entry_from_post(post, sid, subj, case_bundle='', title_combined=''):
+    """Build case_id and title for one subject from POST (bundle or per-subject fields)."""
+    if case_bundle:
+        case_id = case_bundle
+        title = title_combined or post.get(f'title_{sid}', '').strip() or post.get('name', '').strip()
+    else:
+        case_id = post.get(f'case_{sid}', '').strip() or post.get('project_case', '').strip()
+        title = post.get(f'title_{sid}', '').strip() or post.get('name', '').strip()
+    return case_id, title
 
 
 def get_faculty_initials_bundle(department, batch, subject_ids):
@@ -497,17 +517,30 @@ def save_gp_submission(student, dept, post, group=None):
         errors.append('Select at least one group member by enrollment number.')
 
     subject_entries = []
+    case_bundle = post.get('case_bundle', '').strip()
+    title_combined = post.get('title_combined', '').strip()
+    bundle_case = ProjectCase.objects.filter(pk=case_bundle).first() if case_bundle else None
+    combined_title_mode = gp_case_uses_combined_title(bundle_case)
+
+    if len(subject_ids) > 1 and not case_bundle:
+        errors.append('Please select a project case.')
+
     for sid in subject_ids:
         subj = Subject.objects.filter(pk=sid).first()
         if not subj:
             errors.append('Invalid subject selected.')
             continue
-        case_id = post.get(f'case_{sid}', '').strip() or post.get('project_case', '').strip()
-        title = post.get(f'title_{sid}', '').strip() or post.get('name', '').strip()
-        if not case_id:
+        case_id, title = _resolve_subject_entry_from_post(
+            post, sid, subj, case_bundle=case_bundle, title_combined=title_combined,
+        )
+        if not case_id and len(subject_ids) == 1:
             errors.append(f'Please select a project case for {subj.name}.')
         if not title:
-            errors.append(f'Please enter a project title for {subj.name}.')
+            if combined_title_mode:
+                if not any('project title for all subjects' in e for e in errors):
+                    errors.append('Please enter a project title for all subjects.')
+            else:
+                errors.append(f'Please enter a project title for {subj.name}.')
         subject_entries.append({
             'subject': subj,
             'case_id': case_id or None,

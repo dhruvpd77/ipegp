@@ -788,3 +788,42 @@
     margin: 0;
     font-size: 0.9rem;
 }
+
+.gp-case-instructions {
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem;
+    border-radius: 0.65rem;
+    background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+    border: 1px solid #bfdbfe;
+}
+
+.gp-case-instructions-title {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #1e40af;
+    margin-bottom: 0.4rem;
+}
+
+.gp-case-instructions p {
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: #334155;
+}
+
+.gp-project-case-badge {
+    display: inline-block;
+    margin-top: 0.35rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #1e40af;
+    background: #dbeafe;
+    border: 1px solid #93c5fd;
+}

@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}GP Project{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/gp-project.css' %}?v=5">
+<link rel="stylesheet" href="{% static 'css/gp-project.css' %}?v=6">
 {% endblock %}
 {% block content %}
 <div class="gp-page">
@@ -119,6 +119,12 @@
                     </div>
 
                     <div class="gp-form-actions">
+                        <div class="gp-case-instructions" id="gpCaseInstructions" hidden>
+                            <div class="gp-case-instructions-title">
+                                <i class="bi bi-info-circle-fill"></i> Project case guide
+                            </div>
+                            <p id="gpCaseInstructionsText"></p>
+                        </div>
                         <button type="submit" class="btn btn-primary-custom btn-lg w-100">
                             <i class="bi bi-check-circle"></i>
                             {% if editing_group %}Update Project{% else %}Submit Project{% endif %}
@@ -163,10 +169,17 @@
                             {{ g.subject.name|default:"No subject" }}
                             {% if g.subject.subject_type == 'PRACTICAL' %}(Practical){% else %}(Theory){% endif %}
                         </span>
+                        {% if g.linked_batch_id and g.project_case %}
+                        <span class="gp-project-case-badge">{{ g.project_case.name }}</span>
+                        {% endif %}
                     </div>
 
                     <table class="gp-details-table">
                         <tbody>
+                            <tr>
+                                <th>Project Title</th>
+                                <td colspan="3">{{ g.name }}</td>
+                            </tr>
                             <tr>
                                 <th>Case</th>
                                 <td>{{ g.project_case.name|default:"—" }}</td>
@@ -225,8 +238,14 @@
 
                     {% if g.leader_id == student.pk %}
                     <div class="gp-project-footer">
-                        {% if g.linked_batch_id %}
-                        <span class="small text-muted d-block mb-2"><i class="bi bi-link-45deg"></i> Part of a combined practical submission</span>
+                        {% if g.linked_batch_id and g.project_case %}
+                        <span class="small text-muted d-block mb-2"><i class="bi bi-link-45deg"></i> Combined practical submission —
+                        {% with cname=g.project_case.name|lower %}
+                        {% if cname == "case 1" or "case 1" in cname %}same project title for all subjects{% else %}separate title per subject{% endif %}
+                        {% endwith %}
+                        </span>
+                        {% elif g.linked_batch_id %}
+                        <span class="small text-muted d-block mb-2"><i class="bi bi-link-45deg"></i> Combined practical submission</span>
                         {% endif %}
                         <a href="{% url 'portal:gp_group_edit' g.pk %}" class="btn btn-primary"><i class="bi bi-pencil-square"></i> Edit Project</a>
                         <form method="post" action="{% url 'portal:gp_group_delete' g.pk %}" onsubmit="return confirm('Delete this project?')">
@@ -381,26 +400,108 @@ function fillFacultyInitials() {
     document.querySelectorAll('[data-faculty-field]').forEach(el => { el.value = initials; });
 }
 
-function updateStepNumbers(count) {
-    const base = 1 + (count * 2);
+function isCombinedCase(caseId) {
+    const c = PROJECT_CASES.find(x => String(x.pk) === String(caseId));
+    if (!c) return false;
+    const n = (c.name || '').trim().toLowerCase();
+    return n === 'case 1' || n === 'case1' || /^case\s*1\b/.test(n);
+}
+
+function subjectNamesList(subjects) {
+    return subjects.map(s => s.name).join(' and ');
+}
+
+function updateCaseInstructions(caseId, opt) {
+    const box = document.getElementById('gpCaseInstructions');
+    const text = document.getElementById('gpCaseInstructionsText');
+    if (!box || !text || !opt || opt.subjects.length < 2) {
+        if (box) box.hidden = true;
+        return;
+    }
+    const names = subjectNamesList(opt.subjects);
+    if (!caseId) {
+        box.hidden = false;
+        text.textContent = `Select Case 1 for one combined project across all subjects (${names}), or Case 2 for a different project title in each subject.`;
+        return;
+    }
+    box.hidden = false;
+    if (isCombinedCase(caseId)) {
+        text.textContent = `Case 1 means one combined project for all selected subjects (${names}). You will enter a single project title used for every subject.`;
+    } else {
+        text.textContent = `Case 2 means a different project for each subject (${names}). Enter a separate project title for every subject.`;
+    }
+}
+
+function updateStepNumbers(detailSteps) {
+    const base = 1 + detailSteps;
     document.querySelectorAll('.gp-step-diversity').forEach(el => { el.textContent = base; });
     document.querySelectorAll('.gp-step-religion').forEach(el => { el.textContent = base + 1; });
     document.querySelectorAll('.gp-step-members').forEach(el => { el.textContent = base + 2; });
 }
 
-function takenTitlesHtml(subjectId) {
-    const titles = TAKEN_TITLES_BY_SUBJECT[String(subjectId)] || [];
-    if (!titles.length) {
-        return `<div class="gp-taken-titles">
-            <div class="gp-taken-titles-label">Already taken titles (Batch ${STUDENT_BATCH})</div>
-            <p class="gp-taken-titles-empty">No titles taken yet for this subject in your batch.</p>
-        </div>`;
-    }
-    const items = titles.map(t => `<li>${t.replace(/</g, '&lt;')}</li>`).join('');
+function combinedTakenTitlesHtml(subjects) {
+    const lists = subjects.map(sub => {
+        const titles = TAKEN_TITLES_BY_SUBJECT[String(sub.pk)] || [];
+        return { name: sub.name, titles };
+    });
+    const items = lists.map(({ name, titles }) => {
+        if (!titles.length) {
+            return `<li><strong>${name}:</strong> No titles taken yet in your batch.</li>`;
+        }
+        const inner = titles.map(t => t.replace(/</g, '&lt;')).join(', ');
+        return `<li><strong>${name}:</strong> ${inner}</li>`;
+    }).join('');
     return `<div class="gp-taken-titles">
         <div class="gp-taken-titles-label">Already taken titles (Batch ${STUDENT_BATCH})</div>
         <ul>${items}</ul>
     </div>`;
+}
+
+function renderBundleTitles(caseId, opt, titlesContainer, startStep) {
+    titlesContainer.innerHTML = '';
+    if (!caseId) {
+        updateStepNumbers(1);
+        return;
+    }
+
+    if (isCombinedCase(caseId)) {
+        const titles = opt.subjects.map(sub => {
+            const e = BUNDLE_ENTRIES.find(x => String(x.subject_id) === String(sub.pk));
+            return e ? e.title : '';
+        });
+        const combinedTitle = titles.every(t => t === titles[0]) ? (titles[0] || '') : (titles.find(Boolean) || '');
+        titlesContainer.innerHTML = `
+            <div class="gp-panel mb-3">
+                <div class="gp-field mb-0">
+                    <label class="gp-label"><span class="gp-num">${startStep}</span> Project Title (all subjects)</label>
+                    <input type="text" name="title_combined" class="form-control gp-input" required
+                           placeholder="One title for ${subjectNamesList(opt.subjects)}"
+                           value="${combinedTitle.replace(/"/g, '&quot;')}">
+                    ${combinedTakenTitlesHtml(opt.subjects)}
+                </div>
+            </div>`;
+        updateStepNumbers(2);
+        return;
+    }
+
+    let step = startStep;
+    opt.subjects.forEach(sub => {
+        const existing = BUNDLE_ENTRIES.find(e => String(e.subject_id) === String(sub.pk)) || {};
+        const block = document.createElement('div');
+        block.className = 'gp-panel mb-3';
+        block.innerHTML = `
+            <div class="gp-panel-title">${sub.name}</div>
+            <div class="gp-field mb-0">
+                <label class="gp-label"><span class="gp-num">${step}</span> Project Title — ${sub.name}</label>
+                <input type="text" name="title_${sub.pk}" class="form-control gp-input" required
+                       placeholder="Enter project title for ${sub.name}"
+                       value="${existing.title ? existing.title.replace(/"/g, '&quot;') : ''}">
+                ${takenTitlesHtml(sub.pk)}
+            </div>`;
+        titlesContainer.appendChild(block);
+        step += 1;
+    });
+    updateStepNumbers(1 + opt.subjects.length);
 }
 
 function renderSubjectDetails() {
@@ -409,11 +510,41 @@ function renderSubjectDetails() {
     container.innerHTML = '';
     if (!opt) {
         updateStepNumbers(0);
+        updateCaseInstructions(null, null);
         return;
     }
 
+    const isBundle = opt.subjects.length > 1;
     let step = 2;
-    opt.subjects.forEach(sub => {
+
+    if (isBundle) {
+        const existingCaseId = (BUNDLE_ENTRIES[0] && BUNDLE_ENTRIES[0].case_id) || '';
+        const caseBlock = document.createElement('div');
+        caseBlock.className = 'gp-panel mb-3';
+        caseBlock.innerHTML = `
+            <div class="gp-field mb-0">
+                <label class="gp-label"><span class="gp-num">${step}</span> Select Case</label>
+                <select name="case_bundle" id="gpCaseBundle" class="form-select gp-input" required>
+                    ${caseOptions(existingCaseId)}
+                </select>
+                <p class="gp-hint mt-2 mb-0">Case 1 = one combined project. Case 2 = different project per subject.</p>
+            </div>`;
+        container.appendChild(caseBlock);
+
+        const titlesContainer = document.createElement('div');
+        titlesContainer.id = 'gpTitlesContainer';
+        container.appendChild(titlesContainer);
+
+        const caseEl = caseBlock.querySelector('#gpCaseBundle');
+        function refreshTitles() {
+            const caseId = caseEl.value;
+            updateCaseInstructions(caseId, opt);
+            renderBundleTitles(caseId, opt, titlesContainer, step + 1);
+        }
+        caseEl.addEventListener('change', refreshTitles);
+        refreshTitles();
+    } else {
+        const sub = opt.subjects[0];
         const existing = BUNDLE_ENTRIES.find(e => String(e.subject_id) === String(sub.pk)) || {};
         const block = document.createElement('div');
         block.className = 'gp-panel mb-3';
@@ -433,11 +564,27 @@ function renderSubjectDetails() {
                 ${takenTitlesHtml(sub.pk)}
             </div>`;
         container.appendChild(block);
-        step += 2;
-    });
-    updateStepNumbers(opt.subjects.length);
+        updateStepNumbers(2);
+        updateCaseInstructions(null, opt);
+    }
+
     fillFacultyInitials();
     refreshMemberDropdowns();
+}
+
+function takenTitlesHtml(subjectId) {
+    const titles = TAKEN_TITLES_BY_SUBJECT[String(subjectId)] || [];
+    if (!titles.length) {
+        return `<div class="gp-taken-titles">
+            <div class="gp-taken-titles-label">Already taken titles (Batch ${STUDENT_BATCH})</div>
+            <p class="gp-taken-titles-empty">No titles taken yet for this subject in your batch.</p>
+        </div>`;
+    }
+    const items = titles.map(t => `<li>${t.replace(/</g, '&lt;')}</li>`).join('');
+    return `<div class="gp-taken-titles">
+        <div class="gp-taken-titles-label">Already taken titles (Batch ${STUDENT_BATCH})</div>
+        <ul>${items}</ul>
+    </div>`;
 }
 
 function refreshMemberDropdowns() {
