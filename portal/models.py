@@ -77,6 +77,10 @@ class Department(models.Model):
         max_length=150, blank=True,
         help_text='Displayed on attendance sheet e.g. SY- CE\\IT- 1',
     )
+    gp_submission_deadline = models.DateTimeField(
+        null=True, blank=True,
+        help_text='After this date and time students cannot submit or edit GP projects.',
+    )
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='departments_created')
     created_at = models.DateTimeField(auto_now_add=True)
 

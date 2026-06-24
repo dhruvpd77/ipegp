@@ -1,0 +1,76 @@
+{% extends 'portal/base.html' %}
+{% load tz %}
+{% block title %}GP Submission Deadline{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='calendar-event' title='GP Submission Deadline' subtitle='Set when students must finish submitting GP projects for your department' %}
+
+<div class="page-actions">
+    <a href="{% url 'portal:user_management' %}{% if department %}?department={{ department.pk }}{% endif %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Academic Management
+    </a>
+</div>
+
+{% if show_dept_filter %}
+<div class="filter-bar mb-4 flex-wrap">
+    {% include 'portal/includes/department_filter.html' %}
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-clock-history"></i> Deadline Date &amp; Time</div>
+            <div class="portal-card-body">
+                <p class="text-muted small mb-3">
+                    After this deadline, students <strong>cannot submit new GP projects</strong> or <strong>edit existing ones</strong>.
+                    The Edit Project button will be hidden on the student GP page.
+                </p>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Submission deadline</label>
+                        {{ form.gp_submission_deadline }}
+                        {% if form.gp_submission_deadline.errors %}
+                        <div class="text-danger small">{{ form.gp_submission_deadline.errors }}</div>
+                        {% endif %}
+                        <div class="form-text">{{ form.gp_submission_deadline.help_text }} Clear the field and save to remove the deadline.</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom">Save Deadline</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="portal-card">
+            <div class="portal-card-header"><i class="bi bi-info-circle"></i> Current Status</div>
+            <div class="portal-card-body">
+                <p class="mb-2"><strong>Department:</strong> {{ department.name }}</p>
+                {% if department.gp_submission_deadline %}
+                <p class="mb-2">
+                    <strong>Deadline:</strong>
+                    {% timezone "Asia/Kolkata" %}
+                    {{ department.gp_submission_deadline|localtime|date:"d M Y, h:i A" }} (IST)
+                    {% endtimezone %}
+                </p>
+                {% if gp_submission_locked %}
+                <div class="alert alert-warning mb-0 py-2">
+                    <i class="bi bi-lock-fill"></i> Deadline has passed — student GP editing is locked.
+                </div>
+                {% else %}
+                <div class="alert alert-success mb-0 py-2">
+                    <i class="bi bi-unlock"></i> Students can still submit and edit GP projects until the deadline.
+                </div>
+                {% endif %}
+                {% else %}
+                <div class="alert alert-secondary mb-0 py-2">
+                    <i class="bi bi-infinity"></i> No deadline set — students can submit and edit anytime.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

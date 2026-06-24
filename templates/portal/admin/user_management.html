@@ -68,6 +68,15 @@
         </div>
         <i class="bi bi-chevron-right um-card-arrow"></i>
     </a>
+
+    <a href="{% url 'portal:gp_deadline_settings' %}{% if department %}?department={{ department.pk }}{% endif %}" class="um-card">
+        <div class="um-card-icon"><i class="bi bi-calendar-event"></i></div>
+        <div class="um-card-body">
+            <h3 class="um-card-title">GP Submission Deadline</h3>
+            <p class="um-card-desc">Set the date and time after which students cannot submit or edit GP projects.</p>
+        </div>
+        <i class="bi bi-chevron-right um-card-arrow"></i>
+    </a>
 </div>
 
 {% endblock %}

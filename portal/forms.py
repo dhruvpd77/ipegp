@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
+from django.utils import timezone
 
 from .models import (
     User, Semester, Department, Subject, Faculty, Student,
@@ -378,6 +379,25 @@ class ProjectCaseForm(forms.ModelForm):
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Case 1'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
+
+
+class GPDeadlineForm(forms.Form):
+    gp_submission_deadline = forms.DateTimeField(
+        required=False,
+        widget=forms.DateTimeInput(
+            attrs={'type': 'datetime-local', 'class': 'form-control'},
+            format='%Y-%m-%dT%H:%M',
+        ),
+        input_formats=['%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M'],
+        help_text='Students cannot submit or edit GP projects after this date and time.',
+    )
+
+    def __init__(self, *args, department=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.department = department
+        if department and department.gp_submission_deadline:
+            local = timezone.localtime(department.gp_submission_deadline)
+            self.fields['gp_submission_deadline'].initial = local.strftime('%Y-%m-%dT%H:%M')
 
 
 class GPGroupForm(forms.ModelForm):

@@ -83,6 +83,7 @@ urlpatterns = [
     path('forms/<int:pk>/fields/', views.form_template_fields, name='form_template_fields'),
     path('forms/<int:pk>/delete/', views.form_template_delete, name='form_template_delete'),
     path('forms/cases/', views.project_case_list, name='project_case_list'),
+    path('forms/gp-deadline/', views.gp_deadline_settings, name='gp_deadline_settings'),
 
     # Student portal
     path('profile/', views.student_profile, name='student_profile'),

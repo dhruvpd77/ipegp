@@ -1,5 +1,5 @@
 {% extends 'portal/base.html' %}
-{% load static %}
+{% load static tz %}
 {% block title %}GP Project{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/gp-project.css' %}?v=6">
@@ -22,10 +22,25 @@
     </div>
 </header>
 
-{% if not show_submission_form %}
+{% if not show_submission_form and not gp_submission_locked %}
 <div class="gp-notice">
     <i class="bi bi-info-circle"></i>
     You are a <strong>group member</strong>. Your team details are shown below. Only the group leader can edit the project.
+</div>
+{% endif %}
+
+{% if gp_submission_deadline and not gp_submission_locked %}
+<div class="gp-notice">
+    <i class="bi bi-clock"></i>
+    GP project submission deadline:
+    {% timezone "Asia/Kolkata" %}
+    <strong>{{ gp_submission_deadline|localtime|date:"d M Y, h:i A" }}</strong> (IST). Submit before this time.
+    {% endtimezone %}
+</div>
+{% elif gp_submission_locked %}
+<div class="gp-notice">
+    <i class="bi bi-lock-fill"></i>
+    The GP project submission deadline has passed. You can view your project but cannot edit or submit.
 </div>
 {% endif %}
 
@@ -236,7 +251,7 @@
                         </div>
                     </div>
 
-                    {% if g.leader_id == student.pk %}
+                    {% if g.leader_id == student.pk and not gp_submission_locked %}
                     <div class="gp-project-footer">
                         {% if g.linked_batch_id and g.project_case %}
                         <span class="small text-muted d-block mb-2"><i class="bi bi-link-45deg"></i> Combined practical submission —

@@ -8,6 +8,7 @@ from django.db.models import Q
 import os
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
+from django.utils import timezone
 from django.http import HttpResponse, FileResponse, HttpResponseForbidden
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 import mimetypes
@@ -16,7 +17,7 @@ from .decorators import role_required
 from .forms import (
     LoginForm, ChangePasswordForm, SemesterForm, DepartmentForm, AdminUserForm, SubjectForm,
     FacultyForm, StudentForm, ExcelUploadForm, FormTemplateForm, GPGroupForm,
-    FormFieldForm, ProjectCaseForm,
+    FormFieldForm, ProjectCaseForm, GPDeadlineForm,
     ExamSessionForm, MarkEntryForm, build_dynamic_form,
     AttendanceTemplateUploadForm, AttendanceDownloadForm,
     MarksheetTemplateUploadForm, MarksheetDownloadForm,
@@ -39,6 +40,7 @@ from .gp_utils import (
     parse_subject_selection,
     get_pending_gp_students,
     _resolve_subject_entry_from_post,
+    is_gp_submission_locked,
     GENDER_CHOICES, YES_NO_CHOICES,
 )
 from .attendance_sheet import (
@@ -1929,6 +1931,45 @@ def project_case_list(request):
     })
 
 
+@role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
+def gp_deadline_settings(request):
+    ctx = get_user_context(request.user)
+    dept = resolve_department(request.user, ctx, request)
+    if request.user.role == User.Role.DEPARTMENT_ADMIN:
+        dept = ctx.get('department')
+
+    if not dept:
+        messages.error(request, 'Please select a department to configure the GP submission deadline.')
+        return redirect('portal:user_management')
+
+    if request.method == 'POST':
+        form = GPDeadlineForm(request.POST, department=dept)
+        if form.is_valid():
+            deadline = form.cleaned_data['gp_submission_deadline']
+            if deadline and timezone.is_naive(deadline):
+                deadline = timezone.make_aware(deadline, timezone.get_current_timezone())
+            dept.gp_submission_deadline = deadline
+            dept.save(update_fields=['gp_submission_deadline'])
+            if deadline:
+                local = timezone.localtime(deadline)
+                messages.success(
+                    request,
+                    f'GP submission deadline set to {local.strftime("%d %b %Y, %I:%M %p")}.',
+                )
+            else:
+                messages.success(request, 'GP submission deadline removed. Students can submit and edit anytime.')
+            return redirect(f'{reverse("portal:gp_deadline_settings")}?department={dept.pk}')
+    else:
+        form = GPDeadlineForm(department=dept)
+
+    return render(request, 'portal/forms/gp_deadline.html', {
+        'form': form,
+        'department': dept,
+        'gp_submission_locked': is_gp_submission_locked(dept),
+        **dept_filter_context(request.user, ctx, request, dept),
+    })
+
+
 # ─── Student: GP & Profile ───
 
 @login_required
@@ -1981,11 +2022,12 @@ def _gp_student_context(student, editing_group=None, post_data=None):
         [editing_group.pk] if editing_group else []
     )
     is_group_leader = GPGroup.objects.filter(leader=student).exists()
+    gp_locked = is_gp_submission_locked(dept)
     show_submission_form = (
         editing_group is not None
         or not existing_groups.exists()
         or is_group_leader
-    )
+    ) and not gp_locked
 
     subject_options = build_gp_subject_selection_options(subjects)
     initial_selection = selection_value_for_groups(bundle_groups) if bundle_groups else ''
@@ -2064,6 +2106,8 @@ def _gp_student_context(student, editing_group=None, post_data=None):
         'exclude_group_ids_json': json.dumps(exclude_group_ids),
         'show_submission_form': show_submission_form,
         'is_group_leader': is_group_leader,
+        'gp_submission_locked': gp_locked,
+        'gp_submission_deadline': dept.gp_submission_deadline,
         'gender_choices': GENDER_CHOICES,
         'yes_no_choices': YES_NO_CHOICES,
     }
@@ -2099,6 +2143,9 @@ def gp_group_edit(request, group_pk):
     if group.leader_id != student.pk:
         messages.error(request, 'Only the group leader can edit this project.')
         return redirect('portal:gp_project')
+    if is_gp_submission_locked(student.department):
+        messages.error(request, 'The GP project submission deadline has passed. You can no longer edit your project.')
+        return redirect('portal:gp_project')
 
     if request.method == 'POST':
         updated, errors = save_gp_submission(student, student.department, request.POST, group=group)
@@ -2122,6 +2169,9 @@ def gp_group_delete(request, group_pk):
     group = get_object_or_404(GPGroup, pk=group_pk)
     if group.leader_id != student.pk:
         messages.error(request, 'Only the group leader can delete this project.')
+        return redirect('portal:gp_project')
+    if is_gp_submission_locked(student.department):
+        messages.error(request, 'The GP project submission deadline has passed. You can no longer delete your project.')
         return redirect('portal:gp_project')
     if request.method == 'POST':
         bundle = list(get_bundle_groups(group))

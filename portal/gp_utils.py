@@ -6,6 +6,7 @@ import uuid
 import openpyxl
 from django.db.models import Q
 from django.http import HttpResponse
+from django.utils import timezone
 
 from .models import (
     FacultySubjectAssignment, FormField, FormTemplate,
@@ -15,6 +16,13 @@ from .models import (
 
 YES_NO_CHOICES = [('Yes', 'Yes'), ('No', 'No')]
 GENDER_CHOICES = [('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')]
+
+
+def is_gp_submission_locked(dept):
+    """True when the department GP submission deadline has passed."""
+    if not dept or not dept.gp_submission_deadline:
+        return False
+    return timezone.now() >= dept.gp_submission_deadline
 
 
 def slugify_field_name(label):
@@ -497,6 +505,12 @@ def save_gp_submission(student, dept, post, group=None):
     from .models import Student
 
     errors = []
+    if is_gp_submission_locked(dept):
+        if group:
+            errors.append('The GP project submission deadline has passed. You can no longer edit your project.')
+        else:
+            errors.append('The GP project submission deadline has passed. You can no longer submit a project.')
+        return None, errors
     selection = post.get('subject_selection', '').strip()
     subject_ids = parse_subject_selection(selection)
     if not subject_ids and post.get('subject'):
