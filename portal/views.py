@@ -42,6 +42,7 @@ from .gp_utils import (
     _resolve_subject_entry_from_post,
     is_gp_submission_locked,
     GENDER_CHOICES, YES_NO_CHOICES,
+    MAX_GP_GROUP_MEMBERS,
 )
 from .attendance_sheet import (
     generate_attendance_workbook, generate_gp_attendance_workbook,
@@ -2110,6 +2111,7 @@ def _gp_student_context(student, editing_group=None, post_data=None):
         'gp_submission_deadline': dept.gp_submission_deadline,
         'gender_choices': GENDER_CHOICES,
         'yes_no_choices': YES_NO_CHOICES,
+        'max_group_members': MAX_GP_GROUP_MEMBERS,
     }
 
 

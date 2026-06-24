@@ -13,6 +13,8 @@ from .models import (
     GPGroup, GPGroupMemberDetail, ProjectCase, Subject,
 )
 
+MAX_GP_GROUP_MEMBERS = 3
+
 
 YES_NO_CHOICES = [('Yes', 'Yes'), ('No', 'No')]
 GENDER_CHOICES = [('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')]
@@ -579,6 +581,12 @@ def save_gp_submission(student, dept, post, group=None):
 
     if student.pk not in selected_pks:
         selected_pks.insert(0, student.pk)
+
+    unique_members = list(dict.fromkeys(selected_pks))
+    if len(unique_members) > MAX_GP_GROUP_MEMBERS:
+        errors.append(f'A group can have at most {MAX_GP_GROUP_MEMBERS} members.')
+        return None, errors
+    selected_pks = unique_members
 
     exclude_ids = set()
     if group:

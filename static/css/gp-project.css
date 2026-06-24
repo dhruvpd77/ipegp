@@ -268,6 +268,49 @@
     margin-bottom: 0.75rem;
 }
 
+.gp-member-grid {
+    display: grid;
+    grid-template-columns: minmax(5rem, 1fr) minmax(5rem, 1fr) minmax(6.5rem, 1.2fr) auto;
+    gap: 0.75rem 0.65rem;
+    align-items: end;
+}
+
+.gp-member-field--enroll {
+    grid-column: 1 / -1;
+}
+
+.gp-member-field {
+    min-width: 0;
+}
+
+.gp-member-field--action {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+}
+
+.gp-member-field .form-select,
+.gp-member-field .form-control {
+    width: 100%;
+    min-width: 0;
+}
+
+.gp-member-row .member-enroll {
+    font-size: 0.9rem !important;
+}
+
+.gp-member-limit-hint {
+    margin-top: 0.5rem !important;
+    margin-bottom: 0 !important;
+    color: #b45309;
+    font-weight: 600;
+}
+
+#addMemberBtn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 .faculty-initials-field {
     background: #f8fafc !important;
     font-weight: 600;
@@ -595,6 +638,24 @@
 
     .gp-member-row .remove-member {
         margin-top: 0.5rem;
+    }
+
+    .gp-member-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .gp-member-field--enroll {
+        grid-column: 1 / -1;
+    }
+
+    .gp-member-field--action {
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+    }
+
+    .gp-member-field--action .remove-member {
+        width: auto;
+        min-width: 2.75rem;
     }
 
     .gp-form-actions .btn {

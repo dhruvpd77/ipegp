@@ -2,7 +2,7 @@
 {% load static tz %}
 {% block title %}GP Project{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/gp-project.css' %}?v=6">
+<link rel="stylesheet" href="{% static 'css/gp-project.css' %}?v=7">
 {% endblock %}
 {% block content %}
 <div class="gp-page">
@@ -126,8 +126,9 @@
 
                     <div class="gp-panel">
                         <label class="gp-label"><span class="gp-num gp-step-members">4</span> Group Members</label>
-                        <p class="gp-hint">Students already in a team for any selected subject are hidden.</p>
+                        <p class="gp-hint">Students already in a team for any selected subject are hidden. Maximum {{ max_group_members }} members per group.</p>
                         <div id="memberRows"></div>
+                        <p class="gp-hint gp-member-limit-hint" id="addMemberLimitHint" hidden>Maximum {{ max_group_members }} members allowed in one group.</p>
                         <button type="button" class="btn gp-btn-outline w-100 mt-2" id="addMemberBtn">
                             <i class="bi bi-person-plus"></i> Add Member
                         </button>
@@ -618,7 +619,28 @@ function refreshMemberDropdowns() {
     });
 }
 
+const MAX_GROUP_MEMBERS = {{ max_group_members }};
+
+function memberRowCount() {
+    return document.querySelectorAll('.member-row').length;
+}
+
+function updateAddMemberBtn() {
+    const btn = document.getElementById('addMemberBtn');
+    const hint = document.getElementById('addMemberLimitHint');
+    if (!btn) return;
+    const atLimit = memberRowCount() >= MAX_GROUP_MEMBERS;
+    btn.disabled = atLimit;
+    btn.classList.toggle('disabled', atLimit);
+    if (hint) {
+        hint.hidden = !atLimit;
+    }
+}
+
 function addMemberRow(studentPk) {
+    if (!studentPk && memberRowCount() >= MAX_GROUP_MEMBERS) {
+        return;
+    }
     const row = document.createElement('div');
     row.className = 'gp-member-row member-row';
     const pk = studentPk || '';
@@ -626,25 +648,25 @@ function addMemberRow(studentPk) {
     const stu = STUDENTS.find(s => String(s.pk) === String(pk)) || {};
     const det = MEMBER_DETAILS[String(pk)] || {};
     row.innerHTML = `
-    <div class="row g-3 align-items-end">
-        <div class="col-lg-5 col-12">
+    <div class="gp-member-grid">
+        <div class="gp-member-field gp-member-field--enroll">
             <label class="gp-label-sm">Enrollment *</label>
             <select class="form-select gp-input member-enroll" required>${studentOptions(pk, subjectIds)}</select>
         </div>
-        <div class="col-lg-2 col-4">
+        <div class="gp-member-field">
             <label class="gp-label-sm">Roll</label>
             <input class="form-control gp-input member-roll bg-light" readonly value="${stu.roll_no||''}">
         </div>
-        <div class="col-lg-2 col-4">
+        <div class="gp-member-field">
             <label class="gp-label-sm">Branch</label>
             <input class="form-control gp-input member-div bg-light" readonly value="${stu.branch||''}">
         </div>
-        <div class="col-lg-2 col-4">
+        <div class="gp-member-field">
             <label class="gp-label-sm">Gender *</label>
             <select class="form-select gp-input member-gender" required><option value="">—</option>${GENDER_HTML}</select>
         </div>
-        <div class="col-lg-1 col-12 d-flex align-items-end">
-            <button type="button" class="btn btn-outline-danger remove-member w-100" title="Remove"><i class="bi bi-x-lg"></i></button>
+        <div class="gp-member-field gp-member-field--action">
+            <button type="button" class="btn btn-outline-danger remove-member" title="Remove"><i class="bi bi-x-lg"></i></button>
         </div>
     </div>`;
     document.getElementById('memberRows').appendChild(row);
@@ -661,13 +683,18 @@ function addMemberRow(studentPk) {
     enroll.addEventListener('change', sync);
     if (pk) sync();
     row.querySelector('.remove-member').onclick = () => {
-        if (document.querySelectorAll('.member-row').length > 1) row.remove();
+        if (memberRowCount() > 1) {
+            row.remove();
+            updateAddMemberBtn();
+        }
     };
+    updateAddMemberBtn();
 }
 
 document.getElementById('addMemberBtn').onclick = () => addMemberRow('');
-INITIAL_MEMBERS.forEach(pk => addMemberRow(pk));
+INITIAL_MEMBERS.slice(0, MAX_GROUP_MEMBERS).forEach(pk => addMemberRow(pk));
 if (!INITIAL_MEMBERS.length) addMemberRow('');
+updateAddMemberBtn();
 
 document.querySelectorAll('.group-dynamic').forEach(el => {
     const k = el.dataset.field;
