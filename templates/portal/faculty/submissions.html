@@ -1,5 +1,5 @@
 {% extends 'portal/base.html' %}
-{% load static %}
+{% load static tz %}
 {% block title %}My Submissions{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/assigned-subjects.css' %}?v=3">
@@ -172,7 +172,11 @@
                     <td>{{ g.religion_diversity }}</td>
                     <td>{{ g.leader.name }}<br><small class="text-muted">{{ g.leader.enrollment_no }}</small></td>
                     <td>{{ g.member_details.count }}</td>
-                    <td>{{ g.updated_at|date:"d M Y" }}</td>
+                    <td class="text-nowrap small">
+                        {% timezone "Asia/Kolkata" %}
+                        {{ g.updated_at|localtime|date:"d M Y, h:i A" }}
+                        {% endtimezone %}
+                    </td>
                     <td>
                         <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#grp-{{ g.pk }}">View</button>
                     </td>
