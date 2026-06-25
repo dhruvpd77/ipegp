@@ -280,23 +280,36 @@ def get_faculty_map_for_subjects(department, batch, subjects):
     }
 
 
-def get_subject_member_ids(department, subject_id, exclude_group_id=None):
-    """Student PKs already in a GP team for this subject."""
+def get_subject_member_ids(department, subject_id, batch=None, exclude_group_id=None):
+    """Student PKs already in a GP team for this subject (same batch when provided)."""
     if not department or not subject_id:
         return set()
     qs = GPGroup.objects.filter(department=department, subject_id=subject_id)
+    if batch:
+        qs = qs.filter(leader__batch=batch)
     if exclude_group_id:
         qs = qs.exclude(pk=exclude_group_id)
     return set(qs.values_list('members__pk', flat=True))
 
 
-def get_taken_members_by_subject(department, subjects, exclude_group_id=None, exclude_group_ids=None):
+def get_taken_member_ids_any_group(department, batch, exclude_group_ids=None):
+    """Student PKs already in any GP group for this department + batch."""
+    if not department or not batch:
+        return set()
+    qs = GPGroup.objects.filter(department=department, leader__batch=batch)
+    exclude_ids = set(exclude_group_ids or [])
+    if exclude_ids:
+        qs = qs.exclude(pk__in=exclude_ids)
+    return set(qs.values_list('members__pk', flat=True))
+
+
+def get_taken_members_by_subject(department, subjects, batch=None, exclude_group_id=None, exclude_group_ids=None):
     exclude_ids = set(exclude_group_ids or [])
     if exclude_group_id:
         exclude_ids.add(exclude_group_id)
     result = {}
     for s in subjects:
-        taken = set(get_subject_member_ids(department, s.pk))
+        taken = set(get_subject_member_ids(department, s.pk, batch=batch))
         if exclude_ids:
             for g in GPGroup.objects.filter(pk__in=exclude_ids, subject=s):
                 taken -= set(g.members.values_list('pk', flat=True))
@@ -593,19 +606,17 @@ def save_gp_submission(student, dept, post, group=None):
         bundle = list(get_bundle_groups(group))
         exclude_ids = {g.pk for g in bundle}
 
-    for entry in subject_entries:
-        taken = set(get_subject_member_ids(dept, entry['subject'].pk))
-        if exclude_ids:
-            for g in GPGroup.objects.filter(pk__in=exclude_ids, subject=entry['subject']):
-                taken -= set(g.members.values_list('pk', flat=True))
-        for pk in selected_pks:
-            if pk in taken:
-                stu = batch_students.filter(pk=pk).first()
-                label = stu.enrollment_no if stu else pk
-                errors.append(
-                    f'{label} is already in another team for {entry["subject"].name}. '
-                    f'Remove them from that team first or pick a different student.'
-                )
+    taken_any = get_taken_member_ids_any_group(
+        dept, student.batch, exclude_group_ids=list(exclude_ids),
+    )
+    for pk in selected_pks:
+        if pk in taken_any:
+            stu = batch_students.filter(pk=pk).first()
+            label = stu.enrollment_no if stu else pk
+            errors.append(
+                f'{label} is already in another project group. '
+                f'Remove them from that team first or pick a different student.'
+            )
 
     if errors:
         return None, errors
@@ -983,3 +994,258 @@ def create_default_gp_template(semester, department=None, created_by=None):
         FormField.objects.filter(template=tmpl).delete()
         # Standard fields are on GPGroup model; template holds extra dynamic fields only
     return tmpl
+
+
+def departments_in_analytics_scope(user, ctx, dept=None):
+    """Departments visible on GP analytics for the current admin."""
+    from .models import Department, User
+
+    if dept:
+        return [dept]
+    if user.role == User.Role.SEMESTER_ADMIN and ctx.get('semester'):
+        return list(Department.objects.filter(semester=ctx['semester']).order_by('name'))
+    if user.is_superuser or user.role == User.Role.SUPER_ADMIN:
+        semester = ctx.get('semester')
+        if semester:
+            return list(Department.objects.filter(semester=semester).order_by('name'))
+        return list(Department.objects.all().order_by('name'))
+    assigned = ctx.get('department')
+    return [assigned] if assigned else []
+
+
+def compute_gp_analytics_for_departments(departments, batch=None):
+    """Summary counts for GP project groups and students."""
+    from .models import GPGroup, Student
+
+    empty = {
+        'total_students': 0,
+        'submitted_students': 0,
+        'pending_students': 0,
+        'total_groups': 0,
+        'submitted_groups': 0,
+        'draft_groups': 0,
+    }
+    if not departments:
+        return empty
+
+    dept_ids = [d.pk for d in departments]
+    students = Student.objects.filter(department_id__in=dept_ids)
+    groups = GPGroup.objects.filter(department_id__in=dept_ids)
+    submitted_groups_qs = GPGroup.objects.filter(department_id__in=dept_ids, is_submitted=True)
+
+    if batch:
+        students = students.filter(batch=batch)
+        groups = groups.filter(leader__batch=batch)
+        submitted_groups_qs = submitted_groups_qs.filter(leader__batch=batch)
+
+    total_students = students.count()
+    total_groups = groups.count()
+    submitted_groups = groups.filter(is_submitted=True).count()
+
+    student_ids = set(students.values_list('pk', flat=True))
+    submitted_member_ids = set(submitted_groups_qs.values_list('members__pk', flat=True))
+    submitted_students = len(student_ids & submitted_member_ids)
+    pending_students = total_students - submitted_students
+
+    return {
+        'total_students': total_students,
+        'submitted_students': submitted_students,
+        'pending_students': pending_students,
+        'total_groups': total_groups,
+        'submitted_groups': submitted_groups,
+        'draft_groups': total_groups - submitted_groups,
+    }
+
+
+def get_gp_analytics_batches(departments):
+    from .models import Student
+
+    if not departments:
+        return []
+    dept_ids = [d.pk for d in departments]
+    return list(
+        Student.objects.filter(department_id__in=dept_ids)
+        .values_list('batch', flat=True)
+        .distinct()
+        .order_by('batch')
+    )
+
+
+def get_gp_analytics_student_rows(departments, batch=None, status_filter='all'):
+    """Student list with GP submission status for analytics tables."""
+    from .models import GPGroup, Student
+
+    if not departments:
+        return []
+
+    dept_ids = [d.pk for d in departments]
+    groups = GPGroup.objects.filter(
+        department_id__in=dept_ids,
+        is_submitted=True,
+    ).select_related('subject', 'leader').prefetch_related('members')
+    if batch:
+        groups = groups.filter(leader__batch=batch)
+
+    member_info = {}
+    for group in groups:
+        for member in group.members.all():
+            if member.pk in member_info:
+                continue
+            member_info[member.pk] = {
+                'group_title': group.name,
+                'subject': group.subject.name if group.subject else '—',
+                'is_leader': group.leader_id == member.pk,
+            }
+
+    students = Student.objects.filter(
+        department_id__in=dept_ids,
+    ).select_related('department').order_by('batch', 'roll_no')
+    if batch:
+        students = students.filter(batch=batch)
+
+    rows = []
+    for student in students:
+        info = member_info.get(student.pk)
+        submitted = info is not None
+        if status_filter == 'submitted' and not submitted:
+            continue
+        if status_filter == 'pending' and submitted:
+            continue
+        rows.append({
+            'student': student,
+            'gp_status': 'Submitted' if submitted else 'Pending',
+            'group_title': info['group_title'] if info else '—',
+            'subject': info['subject'] if info else '—',
+            'is_leader': info['is_leader'] if info else False,
+        })
+    return rows
+
+
+def get_faculty_analytics_batches(faculty):
+    from .models import FacultySubjectAssignment
+
+    return list(
+        FacultySubjectAssignment.objects.filter(faculty=faculty, is_active=True)
+        .values_list('batch', flat=True)
+        .distinct()
+        .order_by('batch')
+    )
+
+
+def _faculty_assignment_group_query(faculty, batch=None):
+    from .models import FacultySubjectAssignment
+
+    assignments = FacultySubjectAssignment.objects.filter(faculty=faculty, is_active=True)
+    if batch:
+        assignments = assignments.filter(batch=batch)
+    query = Q()
+    for assignment in assignments:
+        query |= Q(
+            department_id=assignment.department_id,
+            subject_id=assignment.subject_id,
+            leader__batch=assignment.batch,
+        )
+    return query, assignments
+
+
+def compute_gp_analytics_for_faculty(faculty, batch=None):
+    """GP analytics limited to subjects and batches assigned to this faculty."""
+    from .models import GPGroup, Student
+
+    empty = {
+        'total_students': 0,
+        'submitted_students': 0,
+        'pending_students': 0,
+        'total_groups': 0,
+        'submitted_groups': 0,
+        'draft_groups': 0,
+    }
+    if not faculty or not faculty.department_id:
+        return empty
+
+    group_query, assignments = _faculty_assignment_group_query(faculty, batch=batch)
+    if not assignments.exists():
+        return empty
+
+    assigned_batches = list(assignments.values_list('batch', flat=True).distinct())
+    students = Student.objects.filter(
+        department=faculty.department,
+        batch__in=assigned_batches,
+    )
+    if batch:
+        students = students.filter(batch=batch)
+
+    groups = GPGroup.objects.filter(group_query) if group_query else GPGroup.objects.none()
+    submitted_groups_qs = groups.filter(is_submitted=True)
+
+    total_students = students.count()
+    total_groups = groups.count()
+    submitted_groups = submitted_groups_qs.count()
+
+    student_ids = set(students.values_list('pk', flat=True))
+    submitted_member_ids = set(submitted_groups_qs.values_list('members__pk', flat=True))
+    submitted_students = len(student_ids & submitted_member_ids)
+    pending_students = total_students - submitted_students
+
+    return {
+        'total_students': total_students,
+        'submitted_students': submitted_students,
+        'pending_students': pending_students,
+        'total_groups': total_groups,
+        'submitted_groups': submitted_groups,
+        'draft_groups': total_groups - submitted_groups,
+    }
+
+
+def get_gp_analytics_student_rows_for_faculty(faculty, batch=None, status_filter='all'):
+    from .models import GPGroup, Student
+
+    if not faculty or not faculty.department_id:
+        return []
+
+    group_query, assignments = _faculty_assignment_group_query(faculty, batch=batch)
+    if not assignments.exists():
+        return []
+
+    assigned_batches = list(assignments.values_list('batch', flat=True).distinct())
+    groups = GPGroup.objects.filter(
+        group_query,
+        is_submitted=True,
+    ).select_related('subject', 'leader').prefetch_related('members')
+    if batch:
+        groups = groups.filter(leader__batch=batch)
+
+    member_info = {}
+    for group in groups:
+        for member in group.members.all():
+            if member.pk in member_info:
+                continue
+            member_info[member.pk] = {
+                'group_title': group.name,
+                'subject': group.subject.name if group.subject else '—',
+                'is_leader': group.leader_id == member.pk,
+            }
+
+    students = Student.objects.filter(
+        department=faculty.department,
+        batch__in=assigned_batches,
+    ).order_by('batch', 'roll_no')
+    if batch:
+        students = students.filter(batch=batch)
+
+    rows = []
+    for student in students:
+        info = member_info.get(student.pk)
+        submitted = info is not None
+        if status_filter == 'submitted' and not submitted:
+            continue
+        if status_filter == 'pending' and submitted:
+            continue
+        rows.append({
+            'student': student,
+            'gp_status': 'Submitted' if submitted else 'Pending',
+            'group_title': info['group_title'] if info else '—',
+            'subject': info['subject'] if info else '—',
+            'is_leader': info['is_leader'] if info else False,
+        })
+    return rows

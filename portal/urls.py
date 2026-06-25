@@ -112,6 +112,9 @@ urlpatterns = [
     # Submissions
     path('submissions/', views.view_submissions, name='view_submissions'),
 
+    # GP Analytics
+    path('analytics/', views.gp_analytics, name='gp_analytics'),
+
     # External examiner registration
     path('external-forms/', views.external_form_manage_list, name='external_form_manage_list'),
     path('external-forms/create/', views.external_form_create, name='external_form_create'),

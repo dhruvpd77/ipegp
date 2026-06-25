@@ -47,6 +47,7 @@
                 <a href="{% url 'portal:admin_marks_entry' %}" class="sidebar-link {% if 'admin_marks_entry' in request.resolver_match.url_name %}active{% endif %}"><i class="bi bi-pencil-square"></i> Marks Entry</a>
                 <a href="{% url 'portal:faculty_duty_list' %}" class="sidebar-link {% if 'faculty_duty' in request.resolver_match.url_name %}active{% endif %}"><i class="bi bi-person-check"></i> Faculty Duty</a>
                 <a href="{% url 'portal:view_submissions' %}" class="sidebar-link {% if request.resolver_match.url_name == 'view_submissions' %}active{% endif %}"><i class="bi bi-inbox"></i> Submissions</a>
+                {% include 'portal/includes/sidebar_analytics.html' %}
                 <a href="{% url 'portal:external_form_manage_list' %}" class="sidebar-link {% if 'external_form' in request.resolver_match.url_name %}active{% endif %}"><i class="bi bi-ui-radios"></i> External Form Mgmt</a>
                 <a href="{% url 'portal:external_submission_list' %}" class="sidebar-link {% if 'external_submission' in request.resolver_match.url_name %}active{% endif %}"><i class="bi bi-person-lines-fill"></i> External Responses</a>
                 {% elif user.role == 'SEMESTER_ADMIN' %}
@@ -60,6 +61,7 @@
                 <a href="{% url 'portal:form_template_list' %}" class="sidebar-link {% if 'form_template' in request.resolver_match.url_name %}active{% endif %}"><i class="bi bi-file-earmark-text"></i> Form Templates</a>
                 <a href="{% url 'portal:exam_session_list' %}" class="sidebar-link {% if 'exam' in request.resolver_match.url_name %}active{% endif %}"><i class="bi bi-clipboard-check"></i> Exams</a>
                 <a href="{% url 'portal:view_submissions' %}" class="sidebar-link {% if request.resolver_match.url_name == 'view_submissions' %}active{% endif %}"><i class="bi bi-inbox"></i> Submissions</a>
+                {% include 'portal/includes/sidebar_analytics.html' %}
                 <a href="{% url 'portal:external_submission_list' %}" class="sidebar-link {% if 'external_submission' in request.resolver_match.url_name %}active{% endif %}"><i class="bi bi-person-lines-fill"></i> External Responses</a>
                 {% elif user.role == 'DEPARTMENT_ADMIN' %}
                 {% include 'portal/includes/sidebar_user_management.html' %}
@@ -71,10 +73,12 @@
                 <a href="{% url 'portal:form_template_list' %}" class="sidebar-link {% if 'form_template' in request.resolver_match.url_name %}active{% endif %}"><i class="bi bi-file-earmark-text"></i> Form Templates</a>
                 <a href="{% url 'portal:exam_session_list' %}" class="sidebar-link {% if 'exam' in request.resolver_match.url_name %}active{% endif %}"><i class="bi bi-clipboard-check"></i> Exams</a>
                 <a href="{% url 'portal:view_submissions' %}" class="sidebar-link {% if request.resolver_match.url_name == 'view_submissions' %}active{% endif %}"><i class="bi bi-inbox"></i> Submissions</a>
+                {% include 'portal/includes/sidebar_analytics.html' %}
                 {% endif %}
                 {% if user.role == 'FACULTY' %}
                 <a href="{% url 'portal:mark_entry_list' %}" class="sidebar-link {% if 'mark_entry' in request.resolver_match.url_name %}active{% endif %}"><i class="bi bi-calendar-check"></i> My Duties</a>
                 <a href="{% url 'portal:faculty_submissions' %}" class="sidebar-link {% if request.resolver_match.url_name == 'faculty_submissions' %}active{% endif %}"><i class="bi bi-inbox"></i> Submissions</a>
+                <a href="{% url 'portal:gp_analytics' %}" class="sidebar-link {% if request.resolver_match.url_name == 'gp_analytics' %}active{% endif %}"><i class="bi bi-bar-chart-line"></i> Analytics</a>
                 <a href="{% url 'portal:faculty_syllabus' %}" class="sidebar-link {% if request.resolver_match.url_name == 'faculty_syllabus' or request.resolver_match.url_name == 'faculty_syllabus_view' %}active{% endif %}"><i class="bi bi-journal-text"></i> Syllabus</a>
                 <a href="{% url 'portal:faculty_papers' %}" class="sidebar-link {% if request.resolver_match.url_name == 'faculty_papers' or request.resolver_match.url_name == 'faculty_paper_view' %}active{% endif %}"><i class="bi bi-file-earmark-word"></i> Papers</a>
                 {% endif %}

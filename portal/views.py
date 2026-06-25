@@ -32,6 +32,14 @@ from .external_form_utils import (
 from .gp_utils import (
     get_gp_template, get_project_cases, get_group_fields, get_member_fields,
     save_gp_submission, get_faculty_map_for_subjects, get_taken_members_by_subject,
+    get_taken_member_ids_any_group,
+    departments_in_analytics_scope,
+    compute_gp_analytics_for_departments,
+    get_gp_analytics_batches,
+    get_gp_analytics_student_rows,
+    get_faculty_analytics_batches,
+    compute_gp_analytics_for_faculty,
+    get_gp_analytics_student_rows_for_faculty,
     export_gp_submissions_excel, create_default_gp_template,
     import_fields_from_excel, import_cases_from_excel,
     build_gp_subject_selection_options, get_bundle_groups,
@@ -2099,7 +2107,14 @@ def _gp_student_context(student, editing_group=None, post_data=None):
             get_faculty_map_for_subjects(dept, student.batch, subjects),
         ),
         'taken_by_subject_json': json.dumps(
-            get_taken_members_by_subject(dept, subjects, exclude_group_ids=exclude_group_ids),
+            get_taken_members_by_subject(
+                dept, subjects, batch=student.batch, exclude_group_ids=exclude_group_ids,
+            ),
+        ),
+        'taken_any_json': json.dumps(
+            list(get_taken_member_ids_any_group(
+                dept, student.batch, exclude_group_ids=exclude_group_ids,
+            )),
         ),
         'taken_titles_by_subject_json': json.dumps(taken_titles_map),
         'classmate_titles_by_subject': classmate_titles_by_subject,
@@ -2817,6 +2832,89 @@ def view_submissions(request):
         'selected_subject': subject_id,
         'batch_filter': batch_filter,
         'status_filter': status_filter,
+        **dept_filter_context(request.user, ctx, request, dept),
+    })
+
+
+@role_required(
+    User.Role.DEPARTMENT_ADMIN,
+    User.Role.SEMESTER_ADMIN,
+    User.Role.SUPER_ADMIN,
+    User.Role.FACULTY,
+)
+def gp_analytics(request):
+    ctx = get_user_context(request.user)
+    batch_filter = request.GET.get('batch', '')
+    status_filter = request.GET.get('status', 'all')
+    if status_filter not in ('all', 'submitted', 'pending'):
+        status_filter = 'all'
+
+    is_faculty = request.user.role == User.Role.FACULTY
+    faculty = getattr(request.user, 'faculty_profile', None) if is_faculty else None
+
+    if is_faculty:
+        if not faculty:
+            messages.error(request, 'Faculty profile not found.')
+            return redirect('portal:dashboard')
+        batches = get_faculty_analytics_batches(faculty)
+        if batch_filter and batch_filter not in batches:
+            batch_filter = ''
+        stats = compute_gp_analytics_for_faculty(faculty, batch=batch_filter or None)
+        batch_breakdown = []
+        if not batch_filter:
+            for batch_name in batches:
+                row = compute_gp_analytics_for_faculty(faculty, batch=batch_name)
+                row['batch'] = batch_name
+                batch_breakdown.append(row)
+        student_rows = get_gp_analytics_student_rows_for_faculty(
+            faculty,
+            batch=batch_filter or None,
+            status_filter=status_filter,
+        )
+        dept = faculty.department
+        return render(request, 'portal/admin/gp_analytics.html', {
+            'stats': stats,
+            'batch_breakdown': batch_breakdown,
+            'student_rows': student_rows,
+            'batches': batches,
+            'batch_filter': batch_filter,
+            'status_filter': status_filter,
+            'is_faculty': True,
+            'faculty': faculty,
+            'department': dept,
+            'departments': [],
+            'show_dept_filter': False,
+            'is_super': False,
+        })
+
+    dept = resolve_department(request.user, ctx, request)
+    departments = departments_in_analytics_scope(request.user, ctx, dept)
+    batches = get_gp_analytics_batches(departments)
+    stats = compute_gp_analytics_for_departments(
+        departments, batch=batch_filter or None,
+    )
+
+    batch_breakdown = []
+    if not batch_filter:
+        for batch_name in batches:
+            row = compute_gp_analytics_for_departments(departments, batch=batch_name)
+            row['batch'] = batch_name
+            batch_breakdown.append(row)
+
+    student_rows = get_gp_analytics_student_rows(
+        departments,
+        batch=batch_filter or None,
+        status_filter=status_filter,
+    )
+
+    return render(request, 'portal/admin/gp_analytics.html', {
+        'stats': stats,
+        'batch_breakdown': batch_breakdown,
+        'student_rows': student_rows,
+        'batches': batches,
+        'batch_filter': batch_filter,
+        'status_filter': status_filter,
+        'is_faculty': False,
         **dept_filter_context(request.user, ctx, request, dept),
     })
 

@@ -1,0 +1,211 @@
+{% extends 'portal/base.html' %}
+{% load static %}
+{% block title %}GP Analytics{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/analytics.css' %}?v=1">
+{% endblock %}
+{% block content %}
+
+{% if department %}
+{% include 'portal/includes/section_header.html' with icon='bar-chart-line' title='GP Analytics' subtitle=department.name %}
+{% elif is_faculty %}
+{% include 'portal/includes/section_header.html' with icon='bar-chart-line' title='GP Analytics' subtitle='Your assigned batches only' %}
+{% else %}
+{% include 'portal/includes/section_header.html' with icon='bar-chart-line' title='GP Analytics' subtitle='Project groups and student submission overview' %}
+{% endif %}
+
+<div class="filter-bar mb-4 flex-wrap">
+    {% if not is_faculty %}
+    {% include 'portal/includes/department_filter.html' %}
+    {% endif %}
+    <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
+        {% if show_dept_filter %}<input type="hidden" name="department" value="{% if department %}{{ department.pk }}{% else %}all{% endif %}">{% endif %}
+        {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+        <label class="fw-semibold">Batch:</label>
+        <select name="batch" class="form-select form-select-sm" style="min-width:120px;" onchange="this.form.submit()" {% if is_faculty and not batches %}disabled{% endif %}>
+            <option value="">All Batches</option>
+            {% for b in batches %}
+            <option value="{{ b }}" {% if batch_filter == b %}selected{% endif %}>{{ b }}</option>
+            {% endfor %}
+        </select>
+        {% if is_faculty and faculty %}
+        <span class="text-muted small">Assigned batches: {% if batches %}{{ batches|join:", " }}{% else %}None{% endif %}</span>
+        {% endif %}
+    </form>
+</div>
+
+{% if is_faculty and not batches %}
+<div class="alert alert-warning">
+    <i class="bi bi-info-circle me-1"></i>
+    No batch assignments found. Contact your department admin to assign subjects and batches.
+</div>
+{% else %}
+
+<!-- Summary stats -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4 col-lg-2">
+        <div class="dash-stat-card analytics-stat">
+            <div class="dash-stat-icon blue"><i class="bi bi-people"></i></div>
+            <div>
+                <div class="dash-stat-num">{{ stats.total_students }}</div>
+                <div class="dash-stat-label">Total Students</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 col-lg-2">
+        <div class="dash-stat-card analytics-stat">
+            <div class="dash-stat-icon green"><i class="bi bi-check-circle"></i></div>
+            <div>
+                <div class="dash-stat-num">{{ stats.submitted_students }}</div>
+                <div class="dash-stat-label">Submitted Students</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 col-lg-2">
+        <div class="dash-stat-card analytics-stat">
+            <div class="dash-stat-icon orange"><i class="bi bi-hourglass-split"></i></div>
+            <div>
+                <div class="dash-stat-num">{{ stats.pending_students }}</div>
+                <div class="dash-stat-label">Pending Students</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 col-lg-2">
+        <div class="dash-stat-card analytics-stat">
+            <div class="dash-stat-icon purple"><i class="bi bi-collection"></i></div>
+            <div>
+                <div class="dash-stat-num">{{ stats.total_groups }}</div>
+                <div class="dash-stat-label">Total Groups</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 col-lg-2">
+        <div class="dash-stat-card analytics-stat">
+            <div class="dash-stat-icon teal"><i class="bi bi-folder-check"></i></div>
+            <div>
+                <div class="dash-stat-num">{{ stats.submitted_groups }}</div>
+                <div class="dash-stat-label">Submitted Groups</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 col-lg-2">
+        <div class="dash-stat-card analytics-stat">
+            <div class="dash-stat-icon slate"><i class="bi bi-pencil-square"></i></div>
+            <div>
+                <div class="dash-stat-num">{{ stats.draft_groups }}</div>
+                <div class="dash-stat-label">Draft Groups</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if batch_breakdown and not batch_filter %}
+<div class="portal-card mb-4">
+    <div class="portal-card-header"><i class="bi bi-table"></i> Batch-wise Summary</div>
+    <div class="portal-card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-custom table-hover mb-0 analytics-batch-table">
+                <thead>
+                    <tr>
+                        <th>Batch</th>
+                        <th>Total Students</th>
+                        <th>Submitted</th>
+                        <th>Pending</th>
+                        <th>Total Groups</th>
+                        <th>Submitted Groups</th>
+                        <th>Draft Groups</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in batch_breakdown %}
+                <tr>
+                    <td><span class="badge bg-primary">{{ row.batch }}</span></td>
+                    <td>{{ row.total_students }}</td>
+                    <td><span class="text-success fw-semibold">{{ row.submitted_students }}</span></td>
+                    <td><span class="text-warning fw-semibold">{{ row.pending_students }}</span></td>
+                    <td>{{ row.total_groups }}</td>
+                    <td>{{ row.submitted_groups }}</td>
+                    <td>{{ row.draft_groups }}</td>
+                    <td>
+                        <a href="?batch={{ row.batch }}{% if show_dept_filter %}&department={% if department %}{{ department.pk }}{% else %}all{% endif %}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}" class="btn btn-sm btn-outline-primary">View</a>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Student details -->
+<div class="portal-card">
+    <div class="portal-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="bi bi-people"></i> Student Details{% if batch_filter %} — Batch {{ batch_filter }}{% endif %}</span>
+        <div class="btn-group btn-group-sm" role="group">
+            <a href="?status=all{% if batch_filter %}&batch={{ batch_filter }}{% endif %}{% if show_dept_filter %}&department={% if department %}{{ department.pk }}{% else %}all{% endif %}{% endif %}"
+               class="btn {% if status_filter == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}">All</a>
+            <a href="?status=submitted{% if batch_filter %}&batch={{ batch_filter }}{% endif %}{% if show_dept_filter %}&department={% if department %}{{ department.pk }}{% else %}all{% endif %}{% endif %}"
+               class="btn {% if status_filter == 'submitted' %}btn-primary{% else %}btn-outline-primary{% endif %}">Submitted</a>
+            <a href="?status=pending{% if batch_filter %}&batch={{ batch_filter }}{% endif %}{% if show_dept_filter %}&department={% if department %}{{ department.pk }}{% else %}all{% endif %}{% endif %}"
+               class="btn {% if status_filter == 'pending' %}btn-primary{% else %}btn-outline-primary{% endif %}">Pending</a>
+        </div>
+    </div>
+    <div class="portal-card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-custom table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="width:60px;">Sr.</th>
+                        <th>Roll</th>
+                        <th>Name</th>
+                        <th>Enrollment</th>
+                        <th>Batch</th>
+                        <th>Branch</th>
+                        <th>Mentor</th>
+                        <th>Phone</th>
+                        {% if not department and show_dept_filter %}<th>Dept</th>{% endif %}
+                        <th>GP Status</th>
+                        <th>Project Title</th>
+                        <th>Subject</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in student_rows %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ row.student.roll_no }}</td>
+                    <td class="fw-semibold">
+                        {{ row.student.name }}
+                        {% if row.is_leader %}<span class="badge bg-dark ms-1">Leader</span>{% endif %}
+                    </td>
+                    <td>{{ row.student.enrollment_no }}</td>
+                    <td><span class="badge bg-primary">{{ row.student.batch }}</span></td>
+                    <td>{{ row.student.branch }}</td>
+                    <td>{{ row.student.mentor }}</td>
+                    <td>{{ row.student.student_phone|default:"—" }}</td>
+                    {% if not department and show_dept_filter %}<td>{{ row.student.department.name }}</td>{% endif %}
+                    <td>
+                        {% if row.gp_status == 'Submitted' %}
+                        <span class="badge bg-success">Submitted</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">Pending</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ row.group_title }}</td>
+                    <td>{{ row.subject }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if not department and show_dept_filter %}12{% else %}11{% endif %}" class="text-center text-muted py-4">No students found for this filter.</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
