@@ -147,7 +147,7 @@
                 <tr class="collapse" id="grp-{{ g.pk }}">
                     <td colspan="{% if not department and show_dept_filter %}11{% else %}10{% endif %}" class="bg-light">
                         <table class="table table-sm table-bordered mb-0">
-                            <thead><tr><th>Enrollment</th><th>Roll</th><th>Batch</th><th>Name</th><th>Gender</th></tr></thead>
+                            <thead><tr><th>Enrollment</th><th>Roll</th><th>Batch</th><th>Name</th><th>Gender</th><th>Area</th><th>Religion</th></tr></thead>
                             <tbody>
                             {% for d in g.member_details.all %}
                             <tr>
@@ -155,7 +155,9 @@
                                 <td>{{ d.student.roll_no }}</td>
                                 <td>{{ d.student.batch }}</td>
                                 <td>{{ d.student.name }}{% if d.student_id == g.leader_id %} <span class="badge bg-dark">Leader</span>{% endif %}</td>
-                                <td>{{ d.gender }}</td>
+                                <td>{{ d.gender|default:"—" }}</td>
+                                <td>{{ d.region|default:"—" }}</td>
+                                <td>{{ d.religion|default:"—" }}</td>
                             </tr>
                             {% endfor %}
                             </tbody>

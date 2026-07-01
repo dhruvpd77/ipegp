@@ -2,7 +2,7 @@
 {% load static tz %}
 {% block title %}GP Project{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/gp-project.css' %}?v=8">
+<link rel="stylesheet" href="{% static 'css/gp-project.css' %}?v=9">
 {% endblock %}
 {% block content %}
 <div class="gp-page">
@@ -222,6 +222,8 @@
                                         <th>Roll</th>
                                         <th>Branch</th>
                                         <th>Gender</th>
+                                        <th>Area</th>
+                                        <th>Religion</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -234,7 +236,9 @@
                                         <td>{{ d.student.enrollment_no }}</td>
                                         <td>{{ d.student.roll_no }}</td>
                                         <td>{{ d.student.branch }}</td>
-                                        <td>{{ d.gender }}</td>
+                                        <td>{{ d.gender|default:"—" }}</td>
+                                        <td>{{ d.region|default:"—" }}</td>
+                                        <td>{{ d.religion|default:"—" }}</td>
                                     </tr>
                                 {% empty %}
                                 {% for m in g.members.all %}
@@ -243,6 +247,8 @@
                                         <td>{{ m.enrollment_no }}</td>
                                         <td>{{ m.roll_no }}</td>
                                         <td>{{ m.branch }}</td>
+                                        <td>—</td>
+                                        <td>—</td>
                                         <td>—</td>
                                     </tr>
                                 {% endfor %}
@@ -366,6 +372,19 @@ const PROJECT_CASES = [
     {% for c in project_cases %}{ pk: {{ c.pk }}, name: "{{ c.name|escapejs }}" }{% if not forloop.last %},{% endif %}{% endfor %}
 ];
 const GENDER_HTML = `{% for val, label in gender_choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}`;
+const RELIGION_CHOICES = {{ religion_choices_json|safe }};
+
+function religionOptionsHtml(selected) {
+    let html = '<option value="">— Select —</option>';
+    RELIGION_CHOICES.forEach(function(item) {
+        const val = item[0];
+        const label = item[1];
+        html += '<option value="' + val.replace(/"/g, '&quot;') + '"' +
+            (String(selected || '') === String(val) ? ' selected' : '') +
+            '>' + label.replace(/</g, '&lt;') + '</option>';
+    });
+    return html;
+}
 const CURRENT_STUDENT_PK = {{ student.pk }};
 
 function getSelectedOption() {
@@ -624,12 +643,27 @@ function syncMemberRowFields(row, studentPk) {
     const s = STUDENTS.find(x => String(x.pk) === String(studentPk));
     const enroll = row.querySelector('.member-enroll');
     const gender = row.querySelector('.member-gender');
+    const region = row.querySelector('.member-region');
+    const religion = row.querySelector('.member-religion');
     const roll = row.querySelector('.member-roll');
     const branch = row.querySelector('.member-div');
     if (roll) roll.value = s ? s.roll_no : '';
     if (branch) branch.value = s ? s.branch : '';
     if (enroll) enroll.name = studentPk ? 'member_ids' : '';
     if (gender) gender.name = studentPk ? ('member_gender_' + studentPk) : 'member_gender_pending';
+    if (region) region.name = studentPk ? ('member_region_' + studentPk) : 'member_region_pending';
+    if (religion) religion.name = studentPk ? ('member_religion_' + studentPk) : 'member_religion_pending';
+}
+
+function applyMemberDetailToRow(row, studentPk) {
+    if (!row) return;
+    const det = MEMBER_DETAILS[String(studentPk)] || {};
+    const gender = row.querySelector('.member-gender');
+    const region = row.querySelector('.member-region');
+    const religion = row.querySelector('.member-religion');
+    if (gender) gender.value = det.gender || '';
+    if (region) region.value = det.region || '';
+    if (religion) religion.innerHTML = religionOptionsHtml(det.religion || '');
 }
 
 function refreshMemberDropdowns() {
@@ -659,6 +693,7 @@ function refreshMemberDropdowns() {
         } else if (current) {
             sel.value = '';
             syncMemberRowFields(row, '');
+            applyMemberDetailToRow(row, '');
         }
     });
 
@@ -673,6 +708,7 @@ function refreshMemberDropdowns() {
 function onMemberEnrollChange(changedSelect) {
     const row = changedSelect.closest('.member-row');
     syncMemberRowFields(row, changedSelect.value);
+    applyMemberDetailToRow(row, changedSelect.value);
     refreshMemberDropdowns();
 }
 
@@ -726,11 +762,19 @@ function addMemberRow(studentPk) {
         <div class="gp-member-field gp-member-field--action">
             <button type="button" class="btn btn-outline-danger remove-member" title="Remove"><i class="bi bi-x-lg"></i></button>
         </div>
+        <div class="gp-member-field gp-member-field--region">
+            <label class="gp-label-sm">Area</label>
+            <input type="text" class="form-control gp-input member-region" placeholder="e.g. Bopal, Naroda, Nikol" value="${(det.region || '').replace(/"/g, '&quot;')}">
+        </div>
+        <div class="gp-member-field gp-member-field--religion">
+            <label class="gp-label-sm">Religion</label>
+            <select class="form-select gp-input member-religion">${religionOptionsHtml(det.religion || '')}</select>
+        </div>
     </div>`;
     document.getElementById('memberRows').appendChild(row);
     const enroll = row.querySelector('.member-enroll');
     const gender = row.querySelector('.member-gender');
-    if (det.gender) gender.value = det.gender;
+    if (det.gender && gender) gender.value = det.gender;
     enroll.addEventListener('change', () => onMemberEnrollChange(enroll));
     row.querySelector('.remove-member').onclick = () => {
         if (memberRowCount() > 1) {

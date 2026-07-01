@@ -389,6 +389,8 @@ class GPGroupMemberDetail(models.Model):
     group = models.ForeignKey(GPGroup, on_delete=models.CASCADE, related_name='member_details')
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='gp_member_details')
     gender = models.CharField(max_length=20, blank=True)
+    region = models.CharField(max_length=100, blank=True, verbose_name='Area name')
+    religion = models.CharField(max_length=50, blank=True)
     member_data = models.JSONField(default=dict, blank=True)
 
     class Meta:

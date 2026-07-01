@@ -18,6 +18,15 @@ MAX_GP_GROUP_MEMBERS = 3
 
 YES_NO_CHOICES = [('Yes', 'Yes'), ('No', 'No')]
 GENDER_CHOICES = [('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')]
+RELIGION_CHOICES = [
+    ('Hindu', 'Hindu'),
+    ('Muslim', 'Muslim'),
+    ('Christian', 'Christian'),
+    ('Sikh', 'Sikh'),
+    ('Jain', 'Jain'),
+    ('Buddhist', 'Buddhist'),
+    ('Other', 'Other'),
+]
 
 
 def is_gp_submission_locked(dept):
@@ -44,6 +53,7 @@ FIXED_FIELD_LABELS = {
     'enrollment no', 'name of the student', 'name', 'sem iii roll no',
     'roll no', 'div', 'gender', 'gender (m/f)', 'gender m/f',
     'gender (m/f)', 'gender diversity (y/n)', 'religion diversity (y/n)',
+    'area name', 'religion',
 }
 
 HEADER_KEYWORDS = ('enrollment', 'case', 'project title', 'roll', 'div', 'gender', 'group id')
@@ -669,6 +679,8 @@ def save_gp_submission(student, dept, post, group=None):
         for pk in selected_pks:
             detail, _ = GPGroupMemberDetail.objects.get_or_create(group=target, student_id=pk)
             detail.gender = post.get(f'member_gender_{pk}', '').strip()
+            detail.region = post.get(f'member_region_{pk}', '').strip()
+            detail.religion = post.get(f'member_religion_{pk}', '').strip()
             detail.member_data = parse_member_data_from_post(post, pk, template)
             detail.save()
 
@@ -837,7 +849,13 @@ def export_gp_submissions_excel(groups, template=None, filename='gp_project_deta
         'Gender Diversity\n(Y/N)', 'Religion Diversity\n(Y/N)',
         'Project Title', 'Subject Faculty Name',
     ]
-    headers = std_headers + [f.field_label for f in extra_group_fields] + [f.field_label for f in extra_member_fields]
+    tail_headers = ['Area Name', 'Religion']
+    headers = (
+        std_headers
+        + [f.field_label for f in extra_group_fields]
+        + [f.field_label for f in extra_member_fields]
+        + tail_headers
+    )
     num_cols = len(headers)
 
     wb = openpyxl.Workbook()
@@ -934,6 +952,8 @@ def export_gp_submissions_excel(groups, template=None, filename='gp_project_deta
                 row_vals.append(group.group_data.get(field.field_name, '') if idx == 0 else '')
             for field in extra_member_fields:
                 row_vals.append(member_data.get(field.field_name, ''))
+            row_vals.append(getattr(detail, 'region', '') or '')
+            row_vals.append(getattr(detail, 'religion', '') or '')
 
             is_last_in_group = idx == len(details) - 1
             row_border = Border(
@@ -965,7 +985,9 @@ def export_gp_submissions_excel(groups, template=None, filename='gp_project_deta
             cell = ws.cell(row=end_row, column=col)
             cell.border = Border(left=thin, right=thin, top=thin, bottom=thick)
 
-    widths = [10, 10, 16, 28, 12, 6, 8, 12, 12, 30, 10]
+    base_widths = [10, 10, 16, 28, 12, 6, 8, 12, 12, 30, 10]
+    extra_count = max(0, num_cols - len(base_widths) - 2)
+    widths = base_widths + [14] * extra_count + [18, 14]
     for i, w in enumerate(widths, 1):
         if i <= num_cols:
             ws.column_dimensions[get_column_letter(i)].width = w

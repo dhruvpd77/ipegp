@@ -289,6 +289,14 @@
     justify-content: flex-end;
 }
 
+.gp-member-field--region {
+    grid-column: 1 / span 2;
+}
+
+.gp-member-field--religion {
+    grid-column: 3 / span 2;
+}
+
 .gp-member-field .form-select,
 .gp-member-field .form-control {
     width: 100%;
@@ -651,6 +659,11 @@
     .gp-member-field--action {
         grid-column: 1 / -1;
         justify-content: flex-end;
+    }
+
+    .gp-member-field--region,
+    .gp-member-field--religion {
+        grid-column: 1 / -1;
     }
 
     .gp-member-field--action .remove-member {

@@ -49,7 +49,7 @@ from .gp_utils import (
     get_pending_gp_students,
     _resolve_subject_entry_from_post,
     is_gp_submission_locked,
-    GENDER_CHOICES, YES_NO_CHOICES,
+    GENDER_CHOICES, YES_NO_CHOICES, RELIGION_CHOICES,
     MAX_GP_GROUP_MEMBERS,
 )
 from .attendance_sheet import (
@@ -2020,6 +2020,8 @@ def _gp_student_context(student, editing_group=None, post_data=None):
         for d in ref_group.member_details.all():
             member_details[str(d.student_id)] = {
                 'gender': d.gender,
+                'region': d.region,
+                'religion': d.religion,
                 'member_data': d.member_data,
             }
 
@@ -2068,6 +2070,14 @@ def _gp_student_context(student, editing_group=None, post_data=None):
                 repost_members.append(int(mid))
         if repost_members:
             initial_members = repost_members
+        for mid in post_data.getlist('member_ids'):
+            if not str(mid).isdigit():
+                continue
+            pk = str(mid)
+            entry = member_details.setdefault(pk, {})
+            entry['gender'] = post_data.get(f'member_gender_{mid}', entry.get('gender', ''))
+            entry['region'] = post_data.get(f'member_region_{mid}', entry.get('region', ''))
+            entry['religion'] = post_data.get(f'member_religion_{mid}', entry.get('religion', ''))
 
     taken_titles_map = get_taken_titles_by_subject(
         dept, student.batch, subjects, exclude_group_ids=exclude_group_ids,
@@ -2125,6 +2135,8 @@ def _gp_student_context(student, editing_group=None, post_data=None):
         'gp_submission_locked': gp_locked,
         'gp_submission_deadline': dept.gp_submission_deadline,
         'gender_choices': GENDER_CHOICES,
+        'religion_choices': RELIGION_CHOICES,
+        'religion_choices_json': json.dumps(RELIGION_CHOICES),
         'yes_no_choices': YES_NO_CHOICES,
         'max_group_members': MAX_GP_GROUP_MEMBERS,
     }
