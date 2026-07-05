@@ -62,6 +62,7 @@ urlpatterns = [
     # Attendance Sheets
     path('attendance/', views.attendance_sheets, name='attendance_sheets'),
     path('attendance/template/<int:pk>/delete/', views.attendance_template_delete, name='attendance_template_delete'),
+    path('group-formations/', views.group_formations, name='group_formations'),
 
     # Marksheet Templates
     path('marksheets/', views.marksheet_templates, name='marksheet_templates'),
@@ -71,6 +72,8 @@ urlpatterns = [
     # Faculty Duty Assignment
     path('duty/', views.faculty_duty_list, name='faculty_duty_list'),
     path('duty/<int:pk>/delete/', views.faculty_duty_delete, name='faculty_duty_delete'),
+    path('duty-gp/', views.faculty_duty_gp, name='faculty_duty_gp'),
+    path('duty-gp/<int:pk>/delete/', views.faculty_duty_gp_delete, name='faculty_duty_gp_delete'),
 
     # Syllabus & Papers
     path('syllabus-papers/', views.syllabus_papers_manage, name='syllabus_papers_manage'),

@@ -21,7 +21,7 @@ from .forms import (
     ExamSessionForm, MarkEntryForm, build_dynamic_form,
     AttendanceTemplateUploadForm, AttendanceDownloadForm,
     MarksheetTemplateUploadForm, MarksheetDownloadForm,
-    FacultyDutyAssignmentForm, FinalMarksheetDownloadForm,
+    FacultyDutyAssignmentForm, FinalMarksheetDownloadForm, GPDutyAssignmentForm,
     SyllabusUploadForm, PaperUploadForm, DutyScheduleUploadForm,
     ExternalRegistrationFormCreateForm, ExternalRegistrationFieldForm,
 )
@@ -42,7 +42,8 @@ from .gp_utils import (
     get_gp_analytics_student_rows_for_faculty,
     export_gp_submissions_excel, create_default_gp_template,
     import_fields_from_excel, import_cases_from_excel,
-    build_gp_subject_selection_options, get_bundle_groups,
+    build_gp_subject_selection_options, build_gp_download_subject_options,
+    get_bundle_groups,
     bundle_subject_entries_from_groups, selection_value_for_groups,
     subjects_for_department, get_taken_titles_by_subject,
     parse_subject_selection,
@@ -55,6 +56,19 @@ from .gp_utils import (
 from .attendance_sheet import (
     generate_attendance_workbook, generate_gp_attendance_workbook,
     get_default_template_path, ensure_default_templates,
+)
+from .group_formation import (
+    department_batches_for_formation,
+    formation_summary_rows,
+    formation_key_for_selection,
+    get_formation,
+    list_batch_group_entries,
+    save_batch_split,
+    subject_selection_for_subject,
+    resolve_subject_selection,
+    list_formation_split_options,
+    parse_split_option_value,
+    primary_subject_for_selection,
 )
 from .duty_schedule import import_duty_schedule, department_batches
 from .marksheet import (
@@ -69,7 +83,7 @@ from .models import (
     Subject, Faculty, Student, FormTemplate, FormField, GPGroup, GPGroupMemberDetail,
     FormSubmission, ProjectCase,
     ExamSession, MarkEntry, GeneratedCredential, AttendanceSheetTemplate,
-    MarksheetTemplate, FacultyDutyAssignment, DutyScheduleUpload,
+    MarksheetTemplate, FacultyDutyAssignment, GPDutyAssignment, DutyScheduleUpload,
     SubjectSyllabus, SubjectPaper, FacultySubjectAssignment,
     ExternalRegistrationForm, ExternalRegistrationField, ExternalRegistrationSubmission,
 )
@@ -1042,6 +1056,11 @@ def attendance_sheets(request):
     upload_form = AttendanceTemplateUploadForm()
     download_form = AttendanceDownloadForm()
     download_form.fields['subject'].queryset = subjects
+    subject_selection_options = build_gp_download_subject_options(list(subjects)) if dept else []
+    if subject_selection_options:
+        download_form.fields['subject_selection'].choices = [
+            (opt['value'], opt['label']) for opt in subject_selection_options
+        ]
 
     if dept:
         download_form.fields['semester_label'].initial = dept.sheet_semester_label or (dept.semester.name if dept.semester else '')
@@ -1072,6 +1091,11 @@ def attendance_sheets(request):
         elif request.POST.get('form_type') == 'download_sheet':
             download_form = AttendanceDownloadForm(request.POST)
             download_form.fields['subject'].queryset = subjects
+            subject_selection_options = build_gp_download_subject_options(list(subjects)) if dept else []
+            if subject_selection_options:
+                download_form.fields['subject_selection'].choices = [
+                    (opt['value'], opt['label']) for opt in subject_selection_options
+                ]
             if dept:
                 batch_choices = [('', 'All Batches (GP)')]
                 batch_choices += [
@@ -1091,22 +1115,36 @@ def attendance_sheets(request):
                 dept.save(update_fields=['sheet_semester_label', 'sheet_department_label'])
 
                 if exam_type == 'GP':
-                    return generate_attendance_workbook(
-                        None, dept, subject, exam_type,
-                        semester_label, department_label,
-                        batch_filter=batch_filter,
-                    )
-
-                tmpl = templates.filter(exam_type=exam_type).order_by('-created_at').first()
-                template_path = tmpl.template_file.path if tmpl and tmpl.template_file else get_default_template_path(exam_type)
-                if not template_path or not os.path.exists(template_path):
-                    messages.error(request, f'No {exam_type} template found. Please upload one first.')
+                    from .group_formation import primary_subject_for_selection
+                    sel = download_form.cleaned_data.get('subject_selection') or subject_selection_for_subject(dept, subject)
+                    formation_sel = formation_key_for_selection(dept, sel)
+                    if not sel:
+                        messages.error(request, 'Select a GP subject.')
+                    elif not get_formation(dept, formation_sel):
+                        messages.error(
+                            request,
+                            'No group formation splits saved for this subject. '
+                            'Configure them under Group Formations first.',
+                        )
+                    else:
+                        gp_subject = primary_subject_for_selection(dept, sel) or subject
+                        return generate_attendance_workbook(
+                            None, dept, gp_subject, exam_type,
+                            semester_label, department_label,
+                            batch_filter=batch_filter,
+                            subject_selection=sel,
+                        )
                 else:
-                    return generate_attendance_workbook(
-                        template_path, dept, subject, exam_type,
-                        semester_label, department_label,
-                        batch_filter=batch_filter,
-                    )
+                    tmpl = templates.filter(exam_type=exam_type).order_by('-created_at').first()
+                    template_path = tmpl.template_file.path if tmpl and tmpl.template_file else get_default_template_path(exam_type)
+                    if not template_path or not os.path.exists(template_path):
+                        messages.error(request, f'No {exam_type} template found. Please upload one first.')
+                    else:
+                        return generate_attendance_workbook(
+                            template_path, dept, subject, exam_type,
+                            semester_label, department_label,
+                            batch_filter=batch_filter,
+                        )
             else:
                 messages.error(request, 'Select department, subject and fill all fields.')
 
@@ -1132,6 +1170,79 @@ def attendance_template_delete(request, pk):
     if dept:
         return redirect(f'{url}?department={dept.pk}')
     return redirect(url)
+
+
+@role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
+def group_formations(request):
+    ctx = get_user_context(request.user)
+    dept = resolve_department(request.user, ctx, request)
+
+    subject_options = []
+    batches = []
+    if dept:
+        subjects = Subject.objects.filter(
+            Q(semester=dept.semester, department__isnull=True) | Q(department=dept)
+        )
+        subject_options = build_gp_subject_selection_options(subjects)
+        batches = department_batches_for_formation(dept)
+
+    subject_selection = request.GET.get('subject_selection') or request.POST.get('subject_selection', '')
+    if not subject_selection and subject_options:
+        subject_selection = subject_options[0]['value']
+
+    batch = request.GET.get('batch') or request.POST.get('batch', '')
+    if not batch and batches:
+        batch = batches[0]
+
+    formation = get_formation(dept, subject_selection) if dept and subject_selection else None
+    batch_config = {}
+    if formation and batch:
+        batch_config = (formation.batches_config or {}).get(batch, {})
+
+    group_entries = []
+    summary_rows = []
+    if dept and subject_selection and batch:
+        group_entries = list_batch_group_entries(dept, subject_selection, batch)
+    if dept and subject_selection:
+        summary_rows = formation_summary_rows(dept, subject_selection)
+
+    if request.method == 'POST' and request.POST.get('form_type') == 'save_split':
+        if not dept:
+            messages.error(request, 'Select a department first.')
+        elif not subject_selection or not batch:
+            messages.error(request, 'Select subject and batch.')
+        else:
+            try:
+                split_count = max(1, int(request.POST.get('split_count') or 1))
+            except (TypeError, ValueError):
+                split_count = 1
+            splits = []
+            for i in range(1, split_count + 1):
+                gids = request.POST.getlist(f'split_{i}_groups')
+                splits.append({'index': i, 'group_ids': gids})
+            save_batch_split(dept, subject_selection, batch, split_count, splits, request.user)
+            messages.success(request, f'Saved {split_count} split(s) for batch {batch}.')
+            url = reverse('portal:group_formations')
+            return redirect(f'{url}?department={dept.pk}&subject_selection={subject_selection}&batch={batch}')
+
+    selected_label = ''
+    for opt in subject_options:
+        if opt['value'] == subject_selection:
+            selected_label = opt['label']
+            break
+
+    return render(request, 'portal/group_formations/list.html', {
+        'subject_options': subject_options,
+        'subject_selection': subject_selection,
+        'selected_subject_label': selected_label,
+        'batches': batches,
+        'batch': batch,
+        'group_entries': group_entries,
+        'batch_config': batch_config,
+        'batch_splits_json': json.dumps(batch_config.get('splits', [])),
+        'summary_rows': summary_rows,
+        **dept_filter_context(request.user, ctx, request, dept),
+    })
 
 
 # ─── Marksheet Templates ───
@@ -1170,6 +1281,11 @@ def marksheet_templates(request):
     upload_form.fields['subject'].queryset = subjects
     download_form = MarksheetDownloadForm()
     download_form.fields['subject'].queryset = subjects
+    subject_selection_options = build_gp_download_subject_options(list(subjects)) if dept else []
+    if subject_selection_options:
+        download_form.fields['subject_selection'].choices = [
+            (opt['value'], opt['label']) for opt in subject_selection_options
+        ]
 
     if dept:
         download_form.fields['semester_label'].initial = dept.sheet_semester_label or (dept.semester.name if dept.semester else '')
@@ -1221,6 +1337,11 @@ def marksheet_templates(request):
         elif request.POST.get('form_type') == 'download_marksheet':
             download_form = MarksheetDownloadForm(request.POST)
             download_form.fields['subject'].queryset = subjects
+            subject_selection_options = build_gp_download_subject_options(list(subjects)) if dept else []
+            if subject_selection_options:
+                download_form.fields['subject_selection'].choices = [
+                    (opt['value'], opt['label']) for opt in subject_selection_options
+                ]
             if download_form.is_valid() and dept:
                 exam_type = download_form.cleaned_data['exam_type']
                 subject = download_form.cleaned_data['subject']
@@ -1231,11 +1352,33 @@ def marksheet_templates(request):
                 dept.sheet_department_label = department_label
                 dept.save(update_fields=['sheet_semester_label', 'sheet_department_label'])
 
-                tmpl = resolve_marksheet_template(exam_type, subject, dept)
-                if not tmpl:
-                    messages.error(request, f'No {exam_type} marksheet template uploaded for {subject.name}. Please upload first.')
+                if exam_type == 'GP':
+                    from .group_formation import primary_subject_for_selection
+                    sel = download_form.cleaned_data.get('subject_selection') or subject_selection_for_subject(dept, subject)
+                    formation_sel = formation_key_for_selection(dept, sel)
+                    if not sel:
+                        messages.error(request, 'Select a GP subject.')
+                    elif not get_formation(dept, formation_sel):
+                        messages.error(
+                            request,
+                            'No group formation splits saved. Configure them under Group Formations first.',
+                        )
+                    else:
+                        gp_subject = primary_subject_for_selection(dept, sel) or subject
+                        tmpl = resolve_marksheet_template(exam_type, gp_subject, dept)
+                        if not tmpl:
+                            messages.error(request, f'No GP marksheet template uploaded for {gp_subject.name}. Please upload first.')
+                        else:
+                            return generate_marksheet_workbook(
+                                tmpl, dept, semester_label, department_label,
+                                subject_selection=sel,
+                            )
                 else:
-                    return generate_marksheet_workbook(tmpl, dept, semester_label, department_label)
+                    tmpl = resolve_marksheet_template(exam_type, subject, dept)
+                    if not tmpl:
+                        messages.error(request, f'No {exam_type} marksheet template uploaded for {subject.name}. Please upload first.')
+                    else:
+                        return generate_marksheet_workbook(tmpl, dept, semester_label, department_label)
             else:
                 messages.error(request, 'Select department, exam type, subject and fill all fields.')
 
@@ -1303,7 +1446,9 @@ def faculty_duty_list(request):
     dept = resolve_department(request.user, ctx, request)
     duties = FacultyDutyAssignment.objects.select_related(
         'faculty', 'subject', 'department',
-    ).filter(is_active=True).order_by('-duty_date', 'batch', 'duty_role')
+    ).filter(is_active=True, exam_type=FacultyDutyAssignment.ExamType.IPE).order_by(
+        '-duty_date', 'batch', 'duty_role',
+    )
     if dept:
         duties = duties.filter(department=dept)
     elif ctx.get('semester'):
@@ -1320,11 +1465,12 @@ def faculty_duty_list(request):
     else:
         batches = Student.objects.values_list('batch', flat=True).distinct().order_by('batch')
 
-    duty_form = FacultyDutyAssignmentForm()
+    duty_form = FacultyDutyAssignmentForm(initial={'exam_type': 'IPE'})
     upload_form = DutyScheduleUploadForm()
     duty_form.fields['subject'].queryset = subjects
     duty_form.fields['faculty'].queryset = faculty_qs
     duty_form.fields['batch'].choices = [(b, b) for b in batches]
+    duty_form.fields['exam_type'].choices = [('IPE', 'IPE')]
 
     external_without_login = Faculty.objects.none()
     recent_uploads = DutyScheduleUpload.objects.none()
@@ -1382,6 +1528,7 @@ def faculty_duty_list(request):
                 if duty_form.is_valid():
                     duty = duty_form.save(commit=False)
                     duty.department = dept
+                    duty.exam_type = FacultyDutyAssignment.ExamType.IPE
                     duty.assigned_by = request.user
                     try:
                         duty.save()
@@ -1444,6 +1591,170 @@ def faculty_duty_delete(request, pk):
     return redirect(url)
 
 
+def _setup_gp_duty_form(form, dept, faculty_qs, subject_selection=''):
+    """Populate GP duty form choices for subject, splits, and faculty."""
+    subjects = Subject.objects.filter(
+        Q(semester=dept.semester, department__isnull=True) | Q(department=dept)
+    )
+    subject_options = build_gp_subject_selection_options(list(subjects))
+    form.fields['subject_selection'].choices = [
+        ('', '— Select subject —'),
+    ] + [(o['value'], o['label']) for o in subject_options]
+
+    split_options = list_formation_split_options(dept, subject_selection) if subject_selection else []
+    form.fields['split_choice'].choices = [
+        ('', '— Select split —'),
+    ] + [(o['value'], o['label']) for o in split_options]
+    if not split_options and subject_selection:
+        form.fields['split_choice'].choices = [
+            ('', 'No splits — configure Group Formations first'),
+        ]
+
+    faculty_choices = [('', '— Select —')]
+    faculty_choices += [(str(f.pk), f.name) for f in faculty_qs.order_by('name')]
+    faculty_choices.append(('OTHER', 'Others (enter name)'))
+    form.fields['internal_faculty'].choices = faculty_choices
+
+
+@role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
+def faculty_duty_gp(request):
+    ctx = get_user_context(request.user)
+    dept = resolve_department(request.user, ctx, request)
+    if not dept:
+        return render(request, 'portal/duty/gp_list.html', {
+            'gp_form': GPDutyAssignmentForm(),
+            'assignments': [],
+            'editing': None,
+            'subject_selection': '',
+            **dept_filter_context(request.user, ctx, request, dept),
+        })
+
+    faculty_qs = Faculty.objects.filter(department=dept, is_external=False)
+    subject_selection = request.GET.get('subject_selection') or request.POST.get('subject_selection', '')
+    editing = None
+    edit_pk = request.GET.get('edit') or request.POST.get('edit_pk')
+    if edit_pk:
+        editing = get_object_or_404(GPDutyAssignment, pk=edit_pk, department=dept, is_active=True)
+        if not subject_selection:
+            subject_selection = editing.subject_selection
+
+    if not subject_selection:
+        subjects = Subject.objects.filter(
+            Q(semester=dept.semester, department__isnull=True) | Q(department=dept)
+        )
+        subject_options = build_gp_subject_selection_options(list(subjects))
+        if subject_options:
+            subject_selection = subject_options[0]['value']
+
+    gp_form = GPDutyAssignmentForm()
+    if editing:
+        split_value = f'{editing.batch}|{editing.split_index}'
+        internal_val = str(editing.internal_faculty_id) if editing.internal_faculty_id else (
+            'OTHER' if editing.internal_faculty_other else ''
+        )
+        gp_form = GPDutyAssignmentForm(initial={
+            'subject_selection': editing.subject_selection,
+            'split_choice': split_value,
+            'internal_faculty': internal_val,
+            'internal_faculty_other': editing.internal_faculty_other,
+            'external_faculty_name': editing.external_faculty_name,
+            'duty_date': editing.duty_date,
+            'room_no': editing.room_no,
+        })
+    _setup_gp_duty_form(gp_form, dept, faculty_qs, subject_selection)
+
+    assignments = GPDutyAssignment.objects.filter(
+        department=dept, is_active=True,
+    ).select_related('internal_faculty', 'subject').order_by('-duty_date', 'batch', 'split_index')
+
+    if request.method == 'POST' and request.POST.get('form_type') == 'save_gp_duty':
+        gp_form = GPDutyAssignmentForm(request.POST)
+        sel = request.POST.get('subject_selection', '')
+        _setup_gp_duty_form(gp_form, dept, faculty_qs, sel)
+        if gp_form.is_valid():
+            batch, split_idx = parse_split_option_value(gp_form.cleaned_data['split_choice'])
+            if not batch or split_idx is None:
+                messages.error(request, 'Select a valid group split.')
+            else:
+                split_lookup = {
+                    o['value']: o for o in list_formation_split_options(dept, sel)
+                }
+                split_meta = split_lookup.get(gp_form.cleaned_data['split_choice'], {})
+                primary_subject = primary_subject_for_selection(dept, sel)
+                if not primary_subject:
+                    messages.error(request, 'Invalid subject selection.')
+                else:
+                    internal_val = gp_form.cleaned_data['internal_faculty']
+                    if internal_val == 'OTHER':
+                        internal_other = gp_form.cleaned_data['internal_faculty_other']
+                        internal_faculty = None
+                    elif internal_val:
+                        internal_faculty = faculty_qs.filter(pk=internal_val).first()
+                        internal_other = ''
+                    else:
+                        internal_faculty = None
+                        internal_other = ''
+
+                    post_edit_pk = request.POST.get('edit_pk')
+                    if post_edit_pk:
+                        duty = get_object_or_404(GPDutyAssignment, pk=post_edit_pk, department=dept)
+                    else:
+                        duty = GPDutyAssignment(department=dept)
+
+                    duty.subject_selection = sel
+                    duty.subject = primary_subject
+                    duty.batch = batch
+                    duty.split_index = split_idx
+                    duty.group_ids = split_meta.get('group_ids', [])
+                    duty.internal_faculty = internal_faculty
+                    duty.internal_faculty_other = internal_other
+                    duty.external_faculty_name = gp_form.cleaned_data['external_faculty_name']
+                    duty.duty_date = gp_form.cleaned_data['duty_date']
+                    duty.room_no = gp_form.cleaned_data['room_no']
+                    duty.assigned_by = request.user
+                    duty.is_active = True
+                    duty.save()
+                    action = 'updated' if post_edit_pk else 'saved'
+                    messages.success(request, f'GP duty assignment {action} successfully.')
+                    url = reverse('portal:faculty_duty_gp')
+                    return redirect(f'{url}?department={dept.pk}&subject_selection={sel}')
+        else:
+            messages.error(request, 'Please fix the errors below.')
+
+    subject_label = ''
+    for val, label in gp_form.fields['subject_selection'].choices:
+        if val == subject_selection:
+            subject_label = label
+            break
+
+    return render(request, 'portal/duty/gp_list.html', {
+        'gp_form': gp_form,
+        'assignments': assignments,
+        'editing': editing,
+        'subject_selection': subject_selection,
+        'subject_label': subject_label,
+        **dept_filter_context(request.user, ctx, request, dept),
+    })
+
+
+@role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
+def faculty_duty_gp_delete(request, pk):
+    duty = get_object_or_404(GPDutyAssignment, pk=pk)
+    ctx = get_user_context(request.user)
+    if not _department_in_scope(request.user, ctx, duty.department):
+        messages.error(request, 'You do not have permission to remove this duty.')
+        return redirect('portal:faculty_duty_gp')
+    dept = duty.department
+    if request.method == 'POST':
+        duty.is_active = False
+        duty.save(update_fields=['is_active'])
+        messages.success(request, 'GP duty assignment removed.')
+    url = reverse('portal:faculty_duty_gp')
+    if dept:
+        return redirect(f'{url}?department={dept.pk}')
+    return redirect(url)
+
+
 @role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
 def final_marksheet_download(request):
     ctx = get_user_context(request.user)
@@ -1478,6 +1789,15 @@ def final_marksheet_download(request):
             combined = download_form.cleaned_data.get('download_type') == 'combined'
             if not tmpl:
                 messages.error(request, f'No {exam_type} marksheet template for {subject.name}. Upload template first.')
+            elif exam_type == 'GP':
+                sel = subject_selection_for_subject(dept, subject)
+                if not get_formation(dept, sel):
+                    messages.error(request, 'Configure Group Formations for this GP subject before downloading.')
+                else:
+                    return generate_marksheet_workbook(
+                        tmpl, dept, semester_label, department_label,
+                        combined=False, subject_selection=sel,
+                    )
             else:
                 return generate_marksheet_workbook(
                     tmpl, dept, semester_label, department_label, combined=combined,
@@ -2691,8 +3011,14 @@ def faculty_submissions(request):
         if request.GET.get('download') == 'attendance':
             sem_label = dept.sheet_semester_label or (dept.semester.name if dept.semester else '')
             dept_label = dept.sheet_department_label or dept.name
+            sel = subject_selection_for_subject(dept, subject)
+            if not get_formation(dept, sel):
+                messages.error(request, 'Configure Group Formations for this subject before downloading attendance.')
+                return redirect('portal:faculty_submissions')
             return generate_gp_attendance_workbook(
-                dept, subject, sem_label, dept_label, batch_filter=batch_filter or None,
+                dept, subject, sem_label, dept_label,
+                batch_filter=batch_filter or None,
+                subject_selection=sel,
             )
         template = get_gp_template(dept)
         fname = f"gp_project_{subject.name.replace(' ', '_') if subject else 'all'}.xlsx"
@@ -2808,9 +3134,14 @@ def view_submissions(request):
                 return redirect('portal:view_submissions')
             sem_label = dept_obj.sheet_semester_label or (dept_obj.semester.name if dept_obj.semester else '')
             dept_label = dept_obj.sheet_department_label or dept_obj.name
+            sel = subject_selection_for_subject(dept_obj, subject)
+            if not get_formation(dept_obj, sel):
+                messages.error(request, 'Configure Group Formations for this subject before downloading attendance.')
+                return redirect('portal:view_submissions')
             return generate_gp_attendance_workbook(
                 dept_obj, subject, sem_label, dept_label,
                 batch_filter=batch_filter or None,
+                subject_selection=sel,
             )
         template = get_gp_template(dept_obj)
         fname = f"gp_project_{subject.name.replace(' ', '_') if subject else 'all'}.xlsx"

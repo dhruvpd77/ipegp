@@ -335,7 +335,8 @@ def _gp_extra_columns(template):
 
 def _build_gp_attendance_sheet(ws, groups, batch_name, group_start_num,
                                semester_label, department_label,
-                               subject_name, subject_code, template=None):
+                               subject_name, subject_code, template=None,
+                               group_id_map=None):
     """
     Build one GP attendance sheet for up to GP_GROUPS_PER_SHEET groups.
     Layout matches the official LJIET GP attendance template.
@@ -423,7 +424,9 @@ def _build_gp_attendance_sheet(ws, groups, batch_name, group_start_num,
         if not details:
             continue
 
-        gid = _read_group_id(group) or f'{batch_name}_{group_start_num + group_idx - 1}'
+        gid = (group_id_map or {}).get(group)
+        if not gid:
+            gid = _read_group_id(group) or f'{batch_name}_{group_start_num + group_idx - 1}'
         start_row = data_row
         group_fill = PatternFill('solid', fgColor=dark if group_idx % 2 == 0 else light)
 
@@ -516,63 +519,68 @@ def _build_gp_attendance_sheet(ws, groups, batch_name, group_start_num,
     _apply_gp_print_setup(ws, last_col, footer_end)
 
 
-def _gp_sheet_title(batch, start_num, end_num):
-    return f'{batch}({start_num} TO {end_num}) GP'[:31]
-
-
-def generate_gp_attendance_workbook(department, subject, semester_label, department_label, batch_filter=None):
-    """Generate GP attendance workbook — multiple sheets per batch (6 groups per sheet)."""
-    from .gp_utils import get_gp_template, _group_sort_key
-
-    template = get_gp_template(department)
-    groups = list(
-        GPGroup.objects.filter(
-            department=department,
-            subject=subject,
-            is_submitted=True,
-        ).select_related('leader', 'project_case').prefetch_related('member_details__student', 'members')
+def generate_gp_attendance_workbook(
+    department,
+    subject,
+    semester_label,
+    department_label,
+    batch_filter=None,
+    subject_selection=None,
+):
+    """Generate GP attendance workbook — one sheet per saved formation split."""
+    from .gp_utils import get_gp_template
+    from .group_formation import (
+        formation_key_for_selection,
+        iter_formation_sheets,
+        primary_subject_for_selection,
+        resolve_subject_selection,
     )
-    groups.sort(key=_group_sort_key)
 
-    if batch_filter:
-        groups = [g for g in groups if g.leader and g.leader.batch == batch_filter]
-
-    batches = sorted({g.leader.batch for g in groups if g.leader and g.leader.batch})
-    if not batches:
-        batches = ['A1']
+    group_selection = resolve_subject_selection(department, subject=subject, subject_selection=subject_selection)
+    formation_selection = formation_key_for_selection(department, group_selection)
+    template = get_gp_template(department)
+    display_subject = subject or primary_subject_for_selection(department, group_selection)
+    subject_name = display_subject.name if display_subject else 'GP'
+    subject_code = (display_subject.code or '') if display_subject else ''
 
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
+    sheet_count = 0
+    used_titles = set()
 
-    for batch in batches:
-        batch_groups = [g for g in groups if g.leader and g.leader.batch == batch]
-        if not batch_groups:
-            continue
+    for sheet_title, batch, split_index, groups, group_to_gid in iter_formation_sheets(
+        department, formation_selection, batch_filter=batch_filter,
+        group_subject_selection=group_selection,
+    ):
+        unique_title = sheet_title
+        suffix = 2
+        while unique_title in used_titles:
+            tail = f' ({suffix})'
+            unique_title = sheet_title[: 31 - len(tail)] + tail
+            suffix += 1
+        used_titles.add(unique_title)
+        ws = wb.create_sheet(title=unique_title)
+        _build_gp_attendance_sheet(
+            ws, groups, batch, 1,
+            semester_label, department_label,
+            subject_name, subject_code,
+            template=template,
+            group_id_map=group_to_gid,
+        )
+        sheet_count += 1
 
-        chunks = [
-            batch_groups[i:i + GP_GROUPS_PER_SHEET]
-            for i in range(0, len(batch_groups), GP_GROUPS_PER_SHEET)
-        ]
-        for chunk_idx, chunk in enumerate(chunks):
-            start_num = chunk_idx * GP_GROUPS_PER_SHEET + 1
-            end_num = start_num + len(chunk) - 1
-            ws = wb.create_sheet(title=_gp_sheet_title(batch, start_num, end_num))
-            _build_gp_attendance_sheet(
-                ws, chunk, batch, start_num,
-                semester_label, department_label,
-                subject.name, subject.code or '',
-                template=template,
-            )
-
-    if not wb.sheetnames:
+    if not sheet_count:
         ws = wb.create_sheet(title='No Data')
-        ws.cell(1, 1, 'No GP submissions found for this subject.')
+        ws.cell(
+            1, 1,
+            'No group formation splits found. Configure splits under Group Formations first.',
+        )
 
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
 
-    safe_subject = (subject.code or subject.name).replace(' ', '_')
+    safe_subject = (subject_code or subject_name).replace(' ', '_')
     batch_suffix = f'_{batch_filter}' if batch_filter else ''
     filename = f'GP_Attendance_{safe_subject}_{department.name}{batch_suffix}.xlsx'
     response = HttpResponse(
@@ -624,11 +632,14 @@ def generate_attendance_workbook(
     semester_label,
     department_label,
     batch_filter=None,
+    subject_selection=None,
 ):
     """Generate attendance workbook for IPE or GP."""
     if exam_type == 'GP':
         return generate_gp_attendance_workbook(
-            department, subject, semester_label, department_label, batch_filter=batch_filter,
+            department, subject, semester_label, department_label,
+            batch_filter=batch_filter,
+            subject_selection=subject_selection,
         )
     return generate_ipe_attendance_workbook(
         department, subject, semester_label, department_label,

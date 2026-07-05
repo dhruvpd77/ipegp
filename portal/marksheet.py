@@ -84,11 +84,16 @@ ALIGN_C = Alignment(horizontal='center', vertical='center', wrap_text=True)
 ALIGN_L = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
 COLUMN_FILLS = {
-    'sr_no': FILL_HEAD, 'batch': FILL_HEAD, 'enrollment_no': FILL_HEAD,
+    'sr_no': FILL_HEAD, 'batch': FILL_HEAD, 'div': FILL_HEAD, 'group_id': FILL_HEAD,
+    'enrollment_no': FILL_HEAD,
     'name': FILL_HEAD, 'roll_no': FILL_HEAD, 'final_chit': FILL_PURPLE,
     'deduction_aim': FILL_RED, 'deduction_late': FILL_YELLOW,
     'mark': FILL_PROG, 'total': FILL_TOTAL, 'remarks': FILL_HEAD,
+    'gender_diversity': FILL_HEAD, 'religion_diversity': FILL_HEAD,
+    'case': FILL_HEAD, 'final_marks': FILL_TOTAL,
 }
+
+GP_MARKSHEET_TITLE = 'Group Project Marksheet'
 
 
 def _norm(val):
@@ -101,6 +106,10 @@ def _classify_column(label8, label9):
     low = f'{_norm(label8)} {_norm(label9)}'.lower()
     if 'sr' in low and 'no' in low:
         return 'sr_no'
+    if 'group id' in low:
+        return 'group_id'
+    if low.strip() == 'div' or low.startswith('div '):
+        return 'div'
     if low.strip() == 'batch' or low.startswith('batch '):
         return 'batch'
     if 'enrollment' in low:
@@ -109,6 +118,14 @@ def _classify_column(label8, label9):
         return 'name'
     if 'roll' in low:
         return 'roll_no'
+    if 'gender' in low and 'diversity' in low:
+        return 'gender_diversity'
+    if 'religion' in low and 'diversity' in low:
+        return 'religion_diversity'
+    if 'final' in low and 'mark' in low:
+        return 'final_marks'
+    if 'case' in low and ('1' in low or '2' in low or '3' in low or '/' in low):
+        return 'case'
     if 'final' in low and 'chit' in low:
         return 'final_chit'
     if 'change' in low and 'aim' in low:
@@ -117,8 +134,10 @@ def _classify_column(label8, label9):
         return 'deduction_late'
     if 'remark' in low:
         return 'remarks'
-    if 'program' in low or 'logic' in low or 'output' in low:
+    if 'program' in low or 'logic' in low or 'output' in low or 'ppt' in low or 'presentation' in low:
         return 'mark'
+    if 'total' in low and 'mark' in low:
+        return 'total'
     if ('ipe:' in low or 'gp:' in low) or (
         'total' in low and ('ipe' in low or 'gp' in low) and 'program' not in low
     ):
@@ -139,11 +158,126 @@ def _find_header_row(ws):
     return 8
 
 
-def parse_marksheet_template(file):
-    """Parse uploaded marksheet Excel into a JSON schema (columns + merges)."""
-    wb = openpyxl.load_workbook(file, data_only=False)
-    ws = wb.active
-    header_row = _find_header_row(ws)
+def _is_gp_marksheet_format(ws, header_row):
+    for col in range(1, ws.max_column + 1):
+        val = _norm(ws.cell(header_row, col).value).lower()
+        if 'group id' in val:
+            return True
+    return False
+
+
+def _find_gp_meta_start(ws, header_row):
+    for col in range(7, ws.max_column + 1):
+        val = _norm(ws.cell(header_row, col).value).lower()
+        if 'gender' in val and 'diversity' in val:
+            return col
+    return 12
+
+
+def _parse_gp_marksheet_schema(ws, header_row):
+    """Parse GP group-project marksheet with 3-row headers (attendance-style groups)."""
+    mark_row = header_row + 1
+    marks_sub_row = header_row + 2
+    data_start = marks_sub_row + 1
+    meta_start = _find_gp_meta_start(ws, header_row)
+    last_col = max(ws.max_column, meta_start + 3)
+
+    std_keys = ['sr_no', 'div', 'group_id', 'roll_no', 'enrollment_no', 'name']
+    columns = []
+    for col in range(1, 7):
+        label8 = ws.cell(header_row, col).value
+        columns.append({
+            'col': col,
+            'key': std_keys[col - 1],
+            'field_name': std_keys[col - 1],
+            'type': std_keys[col - 1],
+            'label8': str(label8) if label8 else '',
+            'label9': '',
+            'marks_sub_label': '',
+            'max_marks': None,
+        })
+
+    for col in range(7, meta_start):
+        label_mr = ws.cell(mark_row, col).value
+        label_sr = ws.cell(marks_sub_row, col).value
+        key = _classify_column('', label_mr or label_sr)
+        col_type = 'total' if key == 'total' else 'mark'
+        columns.append({
+            'col': col,
+            'key': key,
+            'field_name': f'mark_{col}',
+            'type': col_type,
+            'label8': '',
+            'label9': str(label_mr) if label_mr else '',
+            'marks_sub_label': str(label_sr) if label_sr else '',
+            'max_marks': _extract_max_marks(label_sr) or _extract_max_marks(label_mr),
+        })
+
+    for col in range(meta_start, last_col + 1):
+        label8 = ws.cell(header_row, col).value
+        label_sr = ws.cell(marks_sub_row, col).value
+        key = _classify_column(label8, label_sr)
+        col_type = key if key in (
+            'gender_diversity', 'religion_diversity', 'case', 'final_marks',
+        ) else 'mark'
+        columns.append({
+            'col': col,
+            'key': key,
+            'field_name': key,
+            'type': col_type,
+            'label8': str(label8) if label8 else '',
+            'label9': '',
+            'marks_sub_label': str(label_sr) if label_sr else '',
+            'max_marks': _extract_max_marks(label_sr) or _extract_max_marks(label8),
+        })
+
+    merges = []
+    for m in ws.merged_cells.ranges:
+        if m.min_row >= header_row and m.max_row <= marks_sub_row:
+            merges.append({
+                'range': str(m),
+                'min_row': m.min_row, 'max_row': m.max_row,
+                'min_col': m.min_col, 'max_col': m.max_col,
+            })
+
+    mark_cols = [c['col'] for c in columns if c['type'] == 'mark']
+    total_col = next((c['col'] for c in columns if c['type'] == 'total'), None)
+    sum_cols = mark_cols[:] if mark_cols else []
+    if total_col and total_col not in sum_cols:
+        pass
+    elif total_col:
+        sum_cols = [c for c in mark_cols if c < total_col]
+
+    widths = {}
+    for c in columns:
+        letter = get_column_letter(c['col'])
+        w = ws.column_dimensions[letter].width
+        if w:
+            widths[str(c['col'])] = round(w, 2)
+
+    return {
+        'gp_format': True,
+        'header_row': header_row,
+        'mark_row': mark_row,
+        'marks_sub_row': marks_sub_row,
+        'subheader_row': mark_row,
+        'data_start_row': data_start,
+        'columns': columns,
+        'merges': merges,
+        'mark_cols': mark_cols,
+        'sum_cols': sum_cols or mark_cols,
+        'total_col': total_col,
+        'gender_col': next((c['col'] for c in columns if c['key'] == 'gender_diversity'), None),
+        'religion_col': next((c['col'] for c in columns if c['key'] == 'religion_diversity'), None),
+        'case_col': next((c['col'] for c in columns if c['key'] == 'case'), None),
+        'final_col': next((c['col'] for c in columns if c['key'] == 'final_marks'), None),
+        'widths': widths,
+        'last_col': max((c['col'] for c in columns), default=15),
+    }
+
+
+def _parse_standard_marksheet_schema(ws, header_row):
+    """Parse standard IPE-style marksheet (per-student rows)."""
     subheader_row = header_row + 1
     has_sub = any(ws.cell(subheader_row, c).value for c in range(1, ws.max_column + 1))
     if not has_sub:
@@ -200,7 +334,6 @@ def parse_marksheet_template(file):
         if w:
             widths[str(c['col'])] = round(w, 2)
 
-    wb.close()
     return {
         'header_row': header_row,
         'subheader_row': subheader_row,
@@ -213,6 +346,19 @@ def parse_marksheet_template(file):
         'widths': widths,
         'last_col': max((c['col'] for c in columns), default=14),
     }
+
+
+def parse_marksheet_template(file):
+    """Parse uploaded marksheet Excel into a JSON schema (columns + merges)."""
+    wb = openpyxl.load_workbook(file, data_only=False)
+    ws = wb.active
+    header_row = _find_header_row(ws)
+    if _is_gp_marksheet_format(ws, header_row):
+        schema = _parse_gp_marksheet_schema(ws, header_row)
+    else:
+        schema = _parse_standard_marksheet_schema(ws, header_row)
+    wb.close()
+    return schema
 
 
 def resolve_marksheet_template(exam_type, subject, department):
@@ -533,11 +679,423 @@ def _build_batch_sheet(
 
 def _ensure_schema(template):
     schema = template.schema or {}
-    if not schema.get('columns'):
+    needs_parse = not schema.get('columns')
+    if template.exam_type == 'GP' and not schema.get('gp_format'):
+        needs_parse = True
+    if needs_parse:
         schema = parse_marksheet_template(template.template_file.path)
         template.schema = schema
         template.save(update_fields=['schema'])
     return schema
+
+
+def _gp_group_value(col_def, group, mem_idx, sr_no, batch_name, gid,
+                    gender_code, religion_code, case_code, student, mark_entry):
+    """Cell value for one GP marksheet data row."""
+    key = col_def['key']
+    ctype = col_def['type']
+    if key == 'sr_no':
+        return sr_no
+    if key == 'div':
+        return batch_name if mem_idx == 0 else None
+    if key == 'group_id':
+        return gid if mem_idx == 0 else None
+    if key == 'roll_no':
+        return str(student.roll_no or '')
+    if key == 'enrollment_no':
+        return str(student.enrollment_no or '')
+    if key == 'name':
+        return (student.name or '').strip().upper()
+    if key == 'gender_diversity':
+        return gender_code if mem_idx == 0 else None
+    if key == 'religion_diversity':
+        return religion_code if mem_idx == 0 else None
+    if key == 'case':
+        return case_code if mem_idx == 0 else None
+    if ctype in ('mark', 'final_chit', 'deduction_aim', 'deduction_late', 'total', 'final_marks', 'remarks'):
+        return _cell_value_from_mark(col_def, mark_entry)
+    return ''
+
+
+def _build_gp_marksheet_headers(ws, schema, last_col):
+    """Rebuild 3-row GP marksheet table headers from parsed schema."""
+    hr = schema['header_row']
+    mr = schema.get('mark_row', hr + 1)
+    sr = schema.get('marks_sub_row', hr + 2)
+
+    for col_def in schema['columns']:
+        col = col_def['col']
+        fill = _fill_for_column(col_def)
+        if col_def.get('label8'):
+            _style(ws.cell(hr, col, col_def['label8']), font=FONT_BOLD, fill=fill)
+        if col_def.get('label9'):
+            sub_fill = FILL_PROG if col_def['type'] == 'mark' else fill
+            _style(ws.cell(mr, col, col_def['label9']), font=FONT_BOLD, fill=sub_fill)
+        if col_def.get('marks_sub_label'):
+            sub_fill = FILL_PROG if col_def['type'] in ('mark', 'total') else fill
+            _style(ws.cell(sr, col, col_def['marks_sub_label']), font=FONT_BOLD, fill=sub_fill)
+
+    for m in schema.get('merges', []):
+        try:
+            ws.merge_cells(m['range'])
+        except ValueError:
+            pass
+
+    for m in schema.get('merges', []):
+        cell = ws.cell(m['min_row'], m['min_col'])
+        col_def = next((c for c in schema['columns'] if c['col'] == m['min_col']), None)
+        if col_def:
+            _style(cell, font=FONT_BOLD, fill=_fill_for_column(col_def))
+
+
+# Landscape A4 GP marksheet — tuned so all ~15 columns fit one printable page.
+GP_MARKSHEET_WIDTH_LIMITS = {
+    'sr_no': (4, 5),
+    'div': (4, 6),
+    'group_id': (8, 11),
+    'roll_no': (5, 7),
+    'enrollment_no': (13, 16),
+    'name': (24, 32),
+    'mark': (6, 9),
+    'total': (7, 9),
+    'gender_diversity': (8, 10),
+    'religion_diversity': (8, 10),
+    'case': (8, 11),
+    'final_marks': (9, 12),
+}
+
+
+def _autofit_gp_marksheet_columns(ws, schema, data_start, data_end):
+    """Compact landscape column widths so the whole marksheet fits one page."""
+    for col_def in schema['columns']:
+        col = col_def['col']
+        key = col_def['key']
+        min_w, max_w = GP_MARKSHEET_WIDTH_LIMITS.get(key, (7, 10))
+        max_len = 0
+        for row in range(data_start, data_end + 1):
+            val = ws.cell(row, col).value
+            if val is not None and not (isinstance(val, str) and val.startswith('=')):
+                max_len = max(max_len, len(str(val)))
+        # Headers wrap (multi-line), so don't let long header labels widen the column.
+        width = min(max(max_len + 1, min_w), max_w)
+        ws.column_dimensions[get_column_letter(col)].width = width
+
+
+def _build_gp_marksheet_sheet(
+    ws, schema, groups, batch_name,
+    semester_label, department_label,
+    subject_name, subject_code,
+    marks_by_student=None,
+    group_id_map=None,
+):
+    """Build one GP marksheet sheet per formation split (attendance-style group layout)."""
+    from .attendance_sheet import (
+        GP_FILL_DIV,
+        GP_FILL_GROUP_ALT,
+        GP_FILL_PEACH,
+        GP_FILL_TBL_HEAD,
+        THICK_SIDE,
+        THIN_SIDE,
+        _apply_gp_print_setup,
+        _autofit_gp_row_heights,
+        _gp_cell_str,
+        _gp_display_name,
+        _merge_and_style,
+        _style_cell,
+        ALIGN_CENTER,
+        ALIGN_LEFT,
+        FILL_GREY,
+        FONT_GP_BOLD,
+        FONT_GP_NORMAL,
+        FONT_GP_NOTES,
+    )
+    from .gp_utils import (
+        gp_case_code,
+        gp_gender_diversity_code,
+        gp_religion_diversity_code,
+        _batch_palette,
+        _read_group_id,
+    )
+    from .models import GPGroupMemberDetail
+
+    marks_by_student = marks_by_student or {}
+    last_col = schema['last_col']
+    last_letter = get_column_letter(last_col)
+    hr = schema['header_row']
+    data_start = schema['data_start_row']
+    name_col = next((c['col'] for c in schema['columns'] if c['key'] == 'name'), 6)
+    sum_cols = schema.get('sum_cols') or schema.get('mark_cols') or []
+    total_col = schema.get('total_col')
+    group_merge_cols = {
+        c['col'] for c in schema['columns']
+        if c['key'] in ('group_id', 'gender_diversity', 'religion_diversity', 'case')
+    }
+
+    ws.sheet_view.showGridLines = True
+
+    _merge_and_style(ws, f'A1:{last_letter}1', 'L. J. University', font=FONT_GP_BOLD, fill=GP_FILL_PEACH)
+    _merge_and_style(
+        ws, f'A2:{last_letter}2',
+        'L. J. Institute of Engineering & Technology, Ahmedabad',
+        font=FONT_GP_BOLD, fill=GP_FILL_PEACH,
+    )
+    _merge_and_style(
+        ws, f'A3:{last_letter}3',
+        f'Semester - {semester_label}   {department_label} Department',
+        font=FONT_GP_BOLD, fill=GP_FILL_PEACH,
+    )
+    _merge_and_style(ws, f'A4:{last_letter}4', GP_MARKSHEET_TITLE, font=FONT_GP_BOLD, fill=FILL_GREY)
+
+    date_start_col = get_column_letter(max(last_col - 5, 7))
+    _merge_and_style(
+        ws, f'A5:{get_column_letter(max(last_col - 6, 6))}5',
+        f'SUBJECT NAME: {subject_name}',
+        font=FONT_GP_BOLD, alignment=ALIGN_LEFT,
+    )
+    _merge_and_style(ws, f'{date_start_col}5:{last_letter}5', 'Date:', font=FONT_GP_BOLD, alignment=ALIGN_LEFT)
+    _merge_and_style(
+        ws, f'A6:{get_column_letter(max(last_col - 6, 6))}6',
+        f'SUBJECT CODE: {subject_code}',
+        font=FONT_GP_BOLD, alignment=ALIGN_LEFT,
+    )
+    _merge_and_style(
+        ws, f'{date_start_col}6:{last_letter}6',
+        'Start Time:                                   End Time:',
+        font=FONT_GP_BOLD, alignment=ALIGN_LEFT,
+    )
+
+    notes = (
+        'N.B : \n'
+        '1) For absent students, enter "AB" in each marks column.\n'
+        '2) Do not merge any entries.'
+    )
+    _merge_and_style(ws, f'A7:{last_letter}7', notes, font=FONT_GP_NOTES, alignment=ALIGN_LEFT)
+
+    _build_gp_marksheet_headers(ws, schema, last_col)
+
+    all_batches = {batch_name}
+    light, dark = _batch_palette(batch_name, all_batches)
+    data_row = data_start
+    sr_no = 1
+    merge_ranges = []
+    group_end_rows = []
+    group_idx = 0
+
+    for group in groups:
+        group_idx += 1
+        details = list(group.member_details.select_related('student').order_by('student__roll_no'))
+        if not details:
+            for m in group.members.order_by('roll_no'):
+                details.append(GPGroupMemberDetail(student=m, gender='', member_data={}))
+        if not details:
+            continue
+
+        gid = (group_id_map or {}).get(group)
+        if not gid:
+            gid = _read_group_id(group) or f'{batch_name}_{group_idx}'
+        gender_code = gp_gender_diversity_code(group)
+        religion_code = gp_religion_diversity_code(group)
+        case_code = gp_case_code(group)
+        start_row = data_row
+        group_fill = PatternFill('solid', fgColor=dark if group_idx % 2 == 0 else light)
+
+        for mem_idx, detail in enumerate(details):
+            student = detail.student
+            mark_entry = marks_by_student.get(student.pk)
+            is_last = mem_idx == len(details) - 1
+            row_border = Border(
+                left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE,
+                bottom=THICK_SIDE if is_last else THIN_SIDE,
+            )
+
+            for col_def in schema['columns']:
+                col = col_def['col']
+                val = _gp_group_value(
+                    col_def, group, mem_idx, sr_no, batch_name, gid,
+                    gender_code, religion_code, case_code, student, mark_entry,
+                )
+                if val is None:
+                    continue
+                if col_def['key'] == 'roll_no':
+                    val = _gp_cell_str(val)
+                elif col_def['key'] == 'enrollment_no':
+                    val = _gp_cell_str(val)
+                elif col_def['key'] == 'name':
+                    val = _gp_display_name(student)
+
+                cell = ws.cell(row=data_row, column=col, value=val if val != '' else None)
+                fill = group_fill
+                if col_def['key'] == 'div' and val:
+                    fill = GP_FILL_DIV
+                elif col_def['key'] == 'group_id' and val:
+                    fill = GP_FILL_GROUP_ALT
+                elif col_def['type'] == 'mark':
+                    fill = FILL_PROG
+                elif col_def['type'] == 'total':
+                    fill = FILL_TOTAL
+                elif col_def['key'] == 'final_marks':
+                    fill = FILL_TOTAL
+                else:
+                    fill = _fill_for_column(col_def)
+                align = ALIGN_LEFT if col == name_col else ALIGN_CENTER
+                _style_cell(
+                    cell, font=FONT_GP_NORMAL, fill=fill,
+                    alignment=align, border_obj=row_border,
+                )
+
+            if total_col and sum_cols:
+                saved_total = _cell_value_from_mark(
+                    next(c for c in schema['columns'] if c['col'] == total_col),
+                    mark_entry,
+                )
+                if saved_total != '':
+                    ws.cell(data_row, total_col).value = saved_total
+                else:
+                    first_l = get_column_letter(min(sum_cols))
+                    last_l = get_column_letter(max(sum_cols))
+                    ws.cell(data_row, total_col).value = (
+                        f'=IF(SUM({first_l}{data_row}:{last_l}{data_row})=0,"",'
+                        f'SUM({first_l}{data_row}:{last_l}{data_row}))'
+                    )
+                _style_cell(ws.cell(data_row, total_col), fill=FILL_TOTAL, border_obj=row_border)
+
+            sr_no += 1
+            data_row += 1
+
+        end_row = data_row - 1
+        if end_row >= start_row:
+            for col in group_merge_cols:
+                merge_ranges.append((start_row, end_row, col))
+            group_end_rows.append(end_row)
+
+    data_end = data_row - 1
+    div_col = next((c['col'] for c in schema['columns'] if c['key'] == 'div'), 2)
+    if data_end >= data_start:
+        ws.merge_cells(start_row=data_start, start_column=div_col, end_row=data_end, end_column=div_col)
+        div_cell = ws.cell(data_start, div_col, batch_name)
+        _style_cell(div_cell, fill=GP_FILL_DIV, alignment=ALIGN_CENTER)
+
+    for start_row, end_row, col in merge_ranges:
+        ws.merge_cells(start_row=start_row, start_column=col, end_row=end_row, end_column=col)
+        merged = ws.cell(row=start_row, column=col)
+        merged.fill = GP_FILL_GROUP_ALT if col == next(
+            (c['col'] for c in schema['columns'] if c['key'] == 'group_id'), 3,
+        ) else _fill_for_column(next(c for c in schema['columns'] if c['col'] == col))
+        merged.alignment = ALIGN_CENTER
+
+    for end_row in group_end_rows:
+        for col in range(1, last_col + 1):
+            cell = ws.cell(row=end_row, column=col)
+            cell.border = Border(left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THICK_SIDE)
+
+    footer_start = data_end + 1 if data_end >= data_start else data_start
+    footers = [
+        'NAME OF EXTERNAL EXAMINER: ',
+        'SIGNATURE OF EXTERNAL EXAMINER:',
+        'NAME OF INTERNAL EXAMINER:',
+        'SIGNATURE OF INTERNAL EXAMINER:',
+    ]
+    footer_end = footer_start + len(footers) - 1
+    for i, text in enumerate(footers):
+        row = footer_start + i
+        _merge_and_style(ws, f'A{row}:{last_letter}{row}', text, font=FONT_GP_NORMAL, alignment=ALIGN_LEFT)
+        ws.row_dimensions[row].height = 16
+
+    for r in range(1, 5):
+        ws.row_dimensions[r].height = 18
+    ws.row_dimensions[5].height = 16
+    ws.row_dimensions[6].height = 16
+
+    if data_end >= data_start:
+        _autofit_gp_marksheet_columns(ws, schema, data_start=data_start, data_end=data_end)
+        _autofit_gp_row_heights(ws, name_col, header_row=hr, data_start=data_start, data_end=data_end, notes_row=7)
+        # Header block (3 rows) needs enough height for wrapped multi-line labels.
+        ws.row_dimensions[hr].height = 30
+        ws.row_dimensions[schema.get('mark_row', hr + 1)].height = 26
+        ws.row_dimensions[schema.get('marks_sub_row', hr + 2)].height = 58
+
+    _apply_gp_print_setup(ws, last_col, footer_end)
+
+
+def generate_gp_marksheet_workbook(
+    template,
+    department,
+    semester_label,
+    department_label,
+    subject_selection=None,
+):
+    """GP marksheet — one sheet per saved formation split (group layout like attendance)."""
+    from .group_formation import (
+        formation_key_for_selection,
+        iter_formation_sheets,
+        primary_subject_for_selection,
+        resolve_subject_selection,
+    )
+
+    schema = _ensure_schema(template)
+    group_selection = resolve_subject_selection(
+        department, subject=template.subject, subject_selection=subject_selection,
+    )
+    formation_selection = formation_key_for_selection(department, group_selection)
+    display_subject = primary_subject_for_selection(department, group_selection) or template.subject
+    subject_name = display_subject.name if display_subject else 'GP'
+    subject_code = (display_subject.code or '') if display_subject else ''
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    sheet_count = 0
+    used_titles = set()
+
+    for sheet_title, batch, split_index, groups, group_to_gid in iter_formation_sheets(
+        department, formation_selection, group_subject_selection=group_selection,
+    ):
+        marks_by_student = {}
+        for group in groups:
+            details = list(group.member_details.select_related('student'))
+            if not details:
+                for m in group.members.all():
+                    details.append(type('Detail', (), {'student': m})())
+            for detail in details:
+                stu = detail.student
+                marks_by_student.update(
+                    get_marks_by_batch(department, template.subject, template.exam_type, stu.batch),
+                )
+
+        unique_title = sheet_title
+        suffix = 2
+        while unique_title in used_titles:
+            tail = f' ({suffix})'
+            unique_title = sheet_title[: 31 - len(tail)] + tail
+            suffix += 1
+        used_titles.add(unique_title)
+        ws = wb.create_sheet(title=unique_title)
+        _build_gp_marksheet_sheet(
+            ws, schema, groups, batch,
+            semester_label, department_label,
+            subject_name, subject_code,
+            marks_by_student=marks_by_student,
+            group_id_map=group_to_gid,
+        )
+        sheet_count += 1
+
+    if not sheet_count:
+        ws = wb.create_sheet(title='No Data')
+        ws.cell(
+            1, 1,
+            'No group formation splits found. Configure splits under Group Formations first.',
+        )
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    safe = (template.subject.code or template.subject.name).replace(' ', '_')
+    filename = f'Marksheet_GP_{safe}_{department.name}.xlsx'
+    response = HttpResponse(
+        output.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 def generate_marksheet_workbook(
@@ -546,8 +1104,15 @@ def generate_marksheet_workbook(
     semester_label,
     department_label,
     combined=False,
+    subject_selection=None,
 ):
-    """Generate marksheet Excel — one sheet per batch, or single COMBINE sheet."""
+    """Generate marksheet Excel — one sheet per batch, or formation splits for GP."""
+    if template.exam_type == 'GP':
+        return generate_gp_marksheet_workbook(
+            template, department, semester_label, department_label,
+            subject_selection=subject_selection,
+        )
+
     schema = _ensure_schema(template)
     students_qs = Student.objects.filter(department=department).order_by('batch', 'roll_no')
     batches = list(students_qs.values_list('batch', flat=True).distinct().order_by('batch'))

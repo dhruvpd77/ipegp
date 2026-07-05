@@ -401,6 +401,28 @@ class GPGroupMemberDetail(models.Model):
         return f"{self.student.name} in {self.group.name}"
 
 
+class GPGroupFormation(models.Model):
+    """Saved GP group split configuration per department and subject selection."""
+    department = models.ForeignKey(
+        Department, on_delete=models.CASCADE, related_name='gp_formations',
+    )
+    subject_selection = models.CharField(max_length=200)
+    batches_config = models.JSONField(default=dict, blank=True)
+    updated_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='gp_formations_updated',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('department', 'subject_selection')]
+        ordering = ['department__name', 'subject_selection']
+
+    def __str__(self):
+        return f'{self.department.name} — {self.subject_selection}'
+
+
 class FormSubmission(models.Model):
     group = models.ForeignKey(GPGroup, on_delete=models.CASCADE, null=True, blank=True, related_name='submissions')
     student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True, related_name='form_submissions')
@@ -559,6 +581,48 @@ class FacultyDutyAssignment(models.Model):
             f'{self.faculty.name} ({self.get_duty_role_display()}) — '
             f'{self.exam_type} {self.subject.name} {self.batch} ({self.duty_date})'
         )
+
+
+class GPDutyAssignment(models.Model):
+    """GP duty per formation split — internal + external faculty on one row."""
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='gp_duty_assignments')
+    subject_selection = models.CharField(max_length=200)
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='gp_duty_assignments')
+    batch = models.CharField(max_length=20)
+    split_index = models.PositiveSmallIntegerField()
+    group_ids = models.JSONField(default=list, blank=True)
+    internal_faculty = models.ForeignKey(
+        Faculty, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='gp_internal_duties',
+    )
+    internal_faculty_other = models.CharField(max_length=200, blank=True)
+    external_faculty_name = models.CharField(max_length=200, blank=True)
+    duty_date = models.DateField()
+    room_no = models.CharField(max_length=50, blank=True)
+    assigned_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='gp_duties_assigned',
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-duty_date', 'batch', 'split_index']
+
+    @property
+    def split_display(self):
+        gids = ', '.join(self.group_ids or [])
+        return f'{self.batch} ({gids})' if gids else self.batch
+
+    @property
+    def internal_display_name(self):
+        if self.internal_faculty_id:
+            return self.internal_faculty.name
+        return self.internal_faculty_other or '—'
+
+    def __str__(self):
+        return f'GP {self.split_display} — {self.internal_display_name} ({self.duty_date})'
 
 
 class ExamSession(models.Model):

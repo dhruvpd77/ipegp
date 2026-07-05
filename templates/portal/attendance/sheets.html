@@ -60,7 +60,7 @@
                 {% else %}
                 <div class="small text-muted mb-3">
                     <p class="mb-2"><strong>IPE:</strong> One sheet per batch (A1, A2, A3…) with all students listed.</p>
-                    <p class="mb-0"><strong>GP:</strong> Uses submitted GP groups. Up to <strong>6 groups per sheet</strong> (e.g. A3(1 TO 6) GP, A3(7 TO 12) GP). Group ID, Div, roll, enrollment and sign columns match the official template. Extra form template fields appear as dynamic columns.</p>
+                    <p class="mb-0"><strong>GP:</strong> Uses <a href="{% url 'portal:group_formations' %}{% if department %}?department={{ department.pk }}{% endif %}">Group Formations</a> splits — one Excel tab per split (all selected groups on that sheet). Configure splits before downloading.</p>
                 </div>
                 <form method="post">
                     {% csrf_token %}
@@ -71,9 +71,13 @@
                             <label class="form-label">Exam Type</label>
                             {{ download_form.exam_type }}
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Subject</label>
+                        <div class="col-md-6" id="ipe-subject-field">
+                            <label class="form-label">Subject (IPE)</label>
                             {{ download_form.subject }}
+                        </div>
+                        <div class="col-md-6" id="gp-subject-field" style="display:none;">
+                            <label class="form-label">GP Subject</label>
+                            {{ download_form.subject_selection }}
                         </div>
                         <div class="col-md-6" id="gp-batch-field">
                             <label class="form-label">Batch <span class="text-muted fw-normal">(GP only)</span></label>
@@ -110,11 +114,15 @@
 (function () {
     const examType = document.getElementById('id_exam_type');
     const batchField = document.getElementById('gp-batch-field');
+    const ipeSubject = document.getElementById('ipe-subject-field');
+    const gpSubject = document.getElementById('gp-subject-field');
     const downloadBtn = document.getElementById('download-btn');
     function syncGpUi() {
         if (!examType) return;
         const isGp = examType.value === 'GP';
         if (batchField) batchField.style.display = isGp ? '' : 'none';
+        if (ipeSubject) ipeSubject.style.display = isGp ? 'none' : '';
+        if (gpSubject) gpSubject.style.display = isGp ? '' : 'none';
         if (downloadBtn) {
             downloadBtn.innerHTML = isGp
                 ? '<i class="bi bi-file-earmark-excel"></i> Download GP Attendance Sheets'

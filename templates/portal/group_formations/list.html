@@ -1,0 +1,167 @@
+{% extends 'portal/base.html' %}
+{% block title %}Group Formations{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='diagram-3' title='Group Formations' subtitle='Split GP groups per batch for attendance and marksheet generation' %}
+
+{% if show_dept_filter %}
+<div class="filter-bar mb-4">
+    {% include 'portal/includes/department_filter.html' %}
+    {% if not department %}
+    <span class="text-muted small ms-auto">Select a department to configure group splits.</span>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if not department %}
+<div class="alert alert-warning">Select a department first.</div>
+{% else %}
+
+<div class="portal-card form-panel mb-4">
+    <div class="portal-card-header"><i class="bi bi-sliders"></i> Configure Splits</div>
+    <div class="portal-card-body">
+        <form method="get" class="row g-3 align-items-end mb-4" id="gfFilterForm">
+            <input type="hidden" name="department" value="{{ department.pk }}">
+            <div class="col-md-5">
+                <label class="form-label fw-semibold">GP Subject</label>
+                <select name="subject_selection" class="form-select" onchange="this.form.submit()">
+                    {% for opt in subject_options %}
+                    <option value="{{ opt.value }}" {% if subject_selection == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+                    {% empty %}
+                    <option value="">No subjects configured</option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">Practical subjects are combined into one option (same as student GP form).</div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Batch</label>
+                <select name="batch" class="form-select" onchange="this.form.submit()">
+                    {% for b in batches %}
+                    <option value="{{ b }}" {% if batch == b %}selected{% endif %}>{{ b }}</option>
+                    {% empty %}
+                    <option value="">No batches</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <p class="small text-muted mb-0">
+                    {% if selected_subject_label %}<strong>{{ selected_subject_label }}</strong> — {% endif %}
+                    Group IDs for batch <strong>{{ batch }}</strong> — same numbering as Project Details Excel (A1_1, A1_2, A1_3…).
+                </p>
+            </div>
+        </form>
+
+        {% if group_entries %}
+        <form method="post" id="gfSaveForm">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="save_split">
+            <input type="hidden" name="subject_selection" value="{{ subject_selection }}">
+            <input type="hidden" name="batch" value="{{ batch }}">
+            {% if show_dept_filter %}<input type="hidden" name="department" value="{{ department.pk }}">{% endif %}
+
+            <div class="row g-3 align-items-end mb-3">
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Number of splits</label>
+                    <input type="number" name="split_count" id="splitCountInput" class="form-control" min="1" max="20"
+                           value="{{ batch_config.split_count|default:2 }}">
+                </div>
+                <div class="col-md-8">
+                    <button type="button" class="btn btn-outline-primary" id="applySplitsBtn">
+                        <i class="bi bi-layout-split"></i> Apply splits
+                    </button>
+                </div>
+            </div>
+
+            <div id="splitsContainer"></div>
+
+            <button type="submit" class="btn btn-primary-custom mt-3">
+                <i class="bi bi-save"></i> Save splits for batch {{ batch }}
+            </button>
+        </form>
+        {% else %}
+        <div class="alert alert-info mb-0">
+            No submitted GP groups found for <strong>{{ batch }}</strong> and this subject.
+            Students must submit GP projects first.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="portal-card">
+    <div class="portal-card-header"><i class="bi bi-table"></i> Saved Formation Summary</div>
+    <div class="portal-card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Batch</th>
+                        <th>Split</th>
+                        <th>Group IDs</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in summary_rows %}
+                    <tr>
+                        <td class="fw-semibold">{{ row.batch }}</td>
+                        <td>{{ row.split_label }}</td>
+                        <td><code>{{ row.group_ids_display }}</code></td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="3" class="text-center text-muted py-4">
+                            No splits saved yet. Configure splits for each batch above.
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if department and group_entries %}
+<script>
+const GROUP_ENTRIES = [
+    {% for g in group_entries %}
+    { id: "{{ g.group_id|escapejs }}", title: "{{ g.title|escapejs }}", members: {{ g.member_count }} }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+const SAVED_SPLITS = {{ batch_splits_json|safe }};
+
+function renderSplits() {
+    const count = Math.max(1, parseInt(document.getElementById('splitCountInput').value || '1', 10));
+    const container = document.getElementById('splitsContainer');
+    container.innerHTML = '';
+
+    for (let i = 1; i <= count; i++) {
+        const saved = SAVED_SPLITS.find(s => Number(s.index) === i) || { group_ids: [] };
+        const savedSet = new Set((saved.group_ids || []).map(String));
+        const panel = document.createElement('div');
+        panel.className = 'border rounded p-3 mb-3 bg-light';
+        let checks = '';
+        GROUP_ENTRIES.forEach(g => {
+            const checked = savedSet.has(g.id) ? ' checked' : '';
+            checks += `<div class="form-check">
+                <input class="form-check-input" type="checkbox" name="split_${i}_groups" value="${g.id}" id="split${i}_${g.id}"${checked}>
+                <label class="form-check-label" for="split${i}_${g.id}">
+                    <strong>${g.id}</strong> — ${g.title} <span class="text-muted">(${g.members} members)</span>
+                </label>
+            </div>`;
+        });
+        panel.innerHTML = `
+            <h6 class="fw-bold mb-2"><i class="bi bi-collection"></i> Split ${i} of batch {{ batch|escapejs }}</h6>
+            <p class="small text-muted">Select groups for this attendance sheet tab.</p>
+            <div class="row">${checks}</div>`;
+        container.appendChild(panel);
+    }
+}
+
+document.getElementById('applySplitsBtn').addEventListener('click', renderSplits);
+renderSplits();
+</script>
+{% endif %}
+{% endblock %}

@@ -386,6 +386,24 @@ def build_gp_subject_selection_options(subjects):
     return options
 
 
+def build_gp_download_subject_options(subjects):
+    """
+    Downloads list every subject individually (theory + each practical),
+    so an admin can download FSD-II and FCSP-II marksheets/attendance separately.
+    """
+    subject_list = list(subjects)
+    options = []
+    for s in subject_list:
+        suffix = 'Theory' if s.subject_type == Subject.SubjectType.THEORY else 'Practical'
+        options.append({
+            'value': f'P-{s.pk}' if s.subject_type == Subject.SubjectType.PRACTICAL else f'T-{s.pk}',
+            'label': f'{s.name} ({suffix})',
+            'mode': s.subject_type,
+            'subjects': [{'pk': s.pk, 'name': s.name}],
+        })
+    return options
+
+
 def parse_subject_selection(selection):
     """Return list of subject PKs from T-{id} or P-{id},{id} selection value."""
     if not selection:
@@ -715,6 +733,67 @@ def _gender_export(val):
     if v in ('female', 'f'):
         return 'F'
     return str(val)[:1].upper() if val else ''
+
+
+def normalize_member_gender(gender_val):
+    """Normalize stored gender to M/F for marksheet diversity codes."""
+    g = (gender_val or '').strip().lower()
+    if g in ('m', 'male', 'boy', 'boys'):
+        return 'M'
+    if g in ('f', 'female', 'girl', 'girls'):
+        return 'F'
+    return _gender_export(gender_val)
+
+
+def gp_gender_diversity_code(group):
+    """
+    Marksheet Gender Diversity column:
+    0 = all boys/girls, 1 = 2 boys + 1 girl, 2 = 2 girls + 1 boy / 1 girl + 1 boy.
+    """
+    details = list(group.member_details.all())
+    if details:
+        genders = [normalize_member_gender(d.gender) for d in details]
+    else:
+        genders = [normalize_member_gender(getattr(m, 'gender', '')) for m in group.members.all()]
+    genders = [g for g in genders if g]
+    if not genders:
+        return ''
+    male = genders.count('M')
+    female = genders.count('F')
+    if male == 0 or female == 0:
+        return 0
+    if male == 2 and female == 1:
+        return 1
+    if (male == 1 and female == 2) or (male == 1 and female == 1):
+        return 2
+    return 2
+
+
+def gp_religion_diversity_code(group):
+    """Yes -> 1, No -> 0 for marksheet Religion Diversity column."""
+    if group.religion_diversity == 'Yes':
+        return 1
+    if group.religion_diversity == 'No':
+        return 0
+    return ''
+
+
+def gp_case_code(group):
+    """Case 1 -> 1, Case 2 -> 2, Case 3 -> 3 for marksheet Case column."""
+    if not group.project_case_id:
+        return ''
+    name = normalize_label(group.project_case.name).lower()
+    match = re.match(r'^case\s*(\d+)', name)
+    if match:
+        return int(match.group(1))
+    compact = re.sub(r'\s+', '', name)
+    if compact in ('case1',):
+        return 1
+    if compact in ('case2',):
+        return 2
+    if compact in ('case3',):
+        return 3
+    return ''
 
 
 def _read_group_id(group):

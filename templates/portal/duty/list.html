@@ -1,8 +1,8 @@
 {% extends 'portal/base.html' %}
-{% block title %}Faculty Duty Assignment{% endblock %}
+{% block title %}Faculty Duty IPE{% endblock %}
 {% block content %}
 
-{% include 'portal/includes/section_header.html' with icon='person-check' title='Faculty Duty Assignment' subtitle='Upload IPE schedule Excel or assign duties manually — internal & external examiners' %}
+{% include 'portal/includes/section_header.html' with icon='person-check' title='Faculty Duty IPE' subtitle='Upload IPE schedule Excel or assign duties manually — internal & external examiners' %}
 
 {% if show_dept_filter %}
 <div class="filter-bar mb-4 flex-wrap">
@@ -84,10 +84,7 @@
                 <form method="post">
                     {% csrf_token %}
                     <input type="hidden" name="form_type" value="assign_duty">
-                    <div class="mb-3">
-                        <label class="form-label">Exam Type</label>
-                        {{ duty_form.exam_type }}
-                    </div>
+                    <input type="hidden" name="exam_type" value="IPE">
                     <div class="mb-3">
                         <label class="form-label">Subject</label>
                         {{ duty_form.subject }}

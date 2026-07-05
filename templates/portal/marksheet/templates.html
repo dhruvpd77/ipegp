@@ -88,9 +88,8 @@
                 <div class="alert alert-warning">Select a department to download marksheets for its students.</div>
                 {% else %}
                 <p class="small text-muted mb-3">
-                    Select <strong>IPE</strong> or <strong>GP</strong> and the <strong>subject</strong>.
-                    Generates one Excel file with a sheet per batch (A1, A2, A3…).
-                    Student details and marks (if entered) are filled automatically from the uploaded template layout.
+                    <strong>IPE:</strong> One sheet per batch. <strong>GP:</strong> One sheet per
+                    <a href="{% url 'portal:group_formations' %}{% if department %}?department={{ department.pk }}{% endif %}">Group Formation</a> split (configure splits first).
                 </p>
                 <form method="post">
                     {% csrf_token %}
@@ -101,9 +100,13 @@
                             <label class="form-label">Exam Type</label>
                             {{ download_form.exam_type }}
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Subject</label>
+                        <div class="col-md-6" id="ms-ipe-subject">
+                            <label class="form-label">Subject (IPE)</label>
                             {{ download_form.subject }}
+                        </div>
+                        <div class="col-md-6" id="ms-gp-subject" style="display:none;">
+                            <label class="form-label">GP Subject</label>
+                            {{ download_form.subject_selection }}
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Semester Label</label>
@@ -123,4 +126,23 @@
         </div>
     </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+    const examType = document.getElementById('id_ms_dl_exam_type');
+    const ipeSubject = document.getElementById('ms-ipe-subject');
+    const gpSubject = document.getElementById('ms-gp-subject');
+    function sync() {
+        if (!examType) return;
+        const isGp = examType.value === 'GP';
+        if (ipeSubject) ipeSubject.style.display = isGp ? 'none' : '';
+        if (gpSubject) gpSubject.style.display = isGp ? '' : 'none';
+    }
+    if (examType) {
+        examType.addEventListener('change', sync);
+        sync();
+    }
+})();
+</script>
 {% endblock %}
