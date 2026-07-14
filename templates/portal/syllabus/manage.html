@@ -82,15 +82,20 @@
             <div class="portal-card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-custom table-hover mb-0">
-                        <thead><tr><th>Subject</th><th>Title</th><th>File</th><th>Scope</th><th>Date</th><th></th></tr></thead>
+                        <thead><tr><th>Subject</th><th>Title</th><th>Actions</th><th>Scope</th><th>Date</th><th></th></tr></thead>
                         <tbody>
                         {% for s in syllabi %}
                         <tr>
                             <td class="fw-semibold">{{ s.subject.name }}</td>
                             <td>{{ s.display_title }}</td>
                             <td>
-                                <a href="{{ s.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-download"></i> {{ s.file_ext }}
+                                <a href="{% url 'portal:faculty_syllabus_view' s.pk %}" target="_blank" rel="noopener"
+                                   class="btn btn-sm btn-primary-custom me-1" title="View">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                                <a href="{% url 'portal:faculty_syllabus_file' s.pk %}?download=1"
+                                   class="btn btn-sm btn-outline-secondary" title="Download">
+                                    <i class="bi bi-download"></i>
                                 </a>
                             </td>
                             <td class="small text-muted">{% if s.department %}{{ s.department.name }}{% else %}All Departments{% endif %}</td>
@@ -103,7 +108,7 @@
                             </td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="6" class="text-center text-muted py-4">No syllabi uploaded yet.</td></tr>
+                        <tr><td colspan="7" class="text-center text-muted py-4">No syllabi uploaded yet.</td></tr>
                         {% endfor %}
                         </tbody>
                     </table>
@@ -116,7 +121,7 @@
             <div class="portal-card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-custom table-hover mb-0">
-                        <thead><tr><th>Subject</th><th>Phase</th><th>Title</th><th>File</th><th>Scope</th><th>Date</th><th></th></tr></thead>
+                        <thead><tr><th>Subject</th><th>Phase</th><th>Title</th><th>Actions</th><th>Scope</th><th>Date</th><th></th></tr></thead>
                         <tbody>
                         {% for p in papers %}
                         <tr>
@@ -124,8 +129,13 @@
                             <td><span class="badge bg-primary">Phase {{ p.phase }}</span></td>
                             <td>{{ p.display_title }}</td>
                             <td>
-                                <a href="{{ p.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-download"></i> Download
+                                <a href="{% url 'portal:faculty_paper_view' p.pk %}" target="_blank" rel="noopener"
+                                   class="btn btn-sm btn-primary-custom me-1" title="View">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                                <a href="{% url 'portal:faculty_paper_file' p.pk %}?download=1"
+                                   class="btn btn-sm btn-outline-secondary" title="Download">
+                                    <i class="bi bi-download"></i>
                                 </a>
                             </td>
                             <td class="small text-muted">{% if p.department %}{{ p.department.name }}{% else %}All Departments{% endif %}</td>

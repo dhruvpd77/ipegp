@@ -22,99 +22,112 @@
     text-overflow: ellipsis;
 }
 .doc-viewer-frame-wrap {
-    background: #525659;
+    background: #ffffff;
     border: 1px solid var(--border);
     border-top: none;
     border-radius: 0 0 0.5rem 0.5rem;
     min-height: calc(100vh - 220px);
     position: relative;
+    overflow: hidden;
 }
 .doc-viewer-frame {
     width: 100%;
     height: calc(100vh - 220px);
     border: none;
     display: block;
-    background: #525659;
+    background: #ffffff;
 }
-.doc-viewer-embed {
-    width: 100%;
+.docx-viewer-scroll {
     height: calc(100vh - 220px);
-    border: none;
-    display: block;
+    overflow-x: auto;
+    overflow-y: auto;
+    padding: 1rem 0.5rem 2rem;
+    box-sizing: border-box;
+    background: #ffffff;
 }
-.doc-viewer-word-fallback {
+.docx-viewer-scroll .docx-wrapper {
+    background: transparent !important;
+    padding: 8px 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+}
+.docx-viewer-scroll .docx-wrapper > section.docx,
+.docx-viewer-scroll .docx-page-fit > section.docx {
+    background: #fff !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+    margin: 0 0 1.25rem 0 !important;
+    transform-origin: top center !important;
+    overflow: visible !important;
+    flex-shrink: 0;
+    border: 1px solid #e5e7eb;
+}
+#docx-preview {
+    width: 100%;
+    min-height: 200px;
+    overflow: visible;
+}
+.docx-loading-banner {
+    color: #64748b;
+    text-align: center;
+    padding: 3rem 1rem;
+    font-size: 0.95rem;
+}
+.docx-error-banner {
+    color: #b91c1c;
+    text-align: center;
+    padding: 2rem 1rem;
+    font-size: 0.95rem;
+}
+.docx-legacy-msg {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     min-height: calc(100vh - 220px);
-    padding: 2.5rem 1.5rem;
-    text-align: center;
-    background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
-}
-.doc-viewer-word-fallback .doc-icon {
-    width: 80px;
-    height: 80px;
-    border-radius: 1rem;
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2.2rem;
-    margin-bottom: 1.25rem;
-    box-shadow: 0 8px 24px rgba(59,130,246,0.3);
-}
-.doc-viewer-word-preview {
-    background: #fff;
-    border: 1px solid var(--border);
-    border-radius: 0.75rem;
-    padding: 1.5rem 2rem;
-    max-width: 720px;
-    width: 100%;
-    max-height: calc(100vh - 320px);
-    overflow-y: auto;
-    text-align: left;
-    line-height: 1.6;
-    font-size: 0.92rem;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
-}
-.doc-viewer-word-preview:empty { display: none; }
-.doc-viewer-loading {
-    color: #64748b;
-    font-size: 0.9rem;
     padding: 2rem;
+    color: #475569;
     text-align: center;
+    background: #ffffff;
+}
+.portal-card.doc-viewer-card {
+    background: #ffffff;
+    box-shadow: none;
+    border: 1px solid var(--border);
 }
 </style>
 {% endblock %}
 {% block content %}
 
-<div class="portal-card">
+<div class="portal-card doc-viewer-card">
     <div class="doc-viewer-toolbar">
         <a href="{{ back_url }}" class="btn btn-sm btn-outline-light"><i class="bi bi-arrow-left"></i> Back</a>
         <span class="doc-title"><i class="bi bi-file-earmark-text me-1"></i> {{ title }}</span>
-        <a href="{{ file_url }}" target="_blank" class="btn btn-sm btn-outline-light"><i class="bi bi-box-arrow-up-right"></i> Open in Tab</a>
+        {% if is_pdf %}
+        <a href="{{ file_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-light">
+            <i class="bi bi-box-arrow-up-right"></i> Open PDF in Tab
+        </a>
+        {% endif %}
         <a href="{{ download_url }}" class="btn btn-sm btn-accent"><i class="bi bi-download"></i> Download</a>
     </div>
     <div class="doc-viewer-frame-wrap">
         {% if is_pdf %}
-        <embed src="{{ file_url }}#toolbar=1&navpanes=0" type="application/pdf" class="doc-viewer-embed" title="{{ title }}">
+        <iframe src="{{ file_url }}#toolbar=1&navpanes=0" class="doc-viewer-frame" title="{{ title }}"></iframe>
+        {% elif is_docx %}
+        <div class="docx-viewer-scroll" id="docx-scroll">
+            <div id="docx-loading" class="docx-loading-banner">Loading original document layout…</div>
+            <div id="docx-preview"></div>
+            <div id="docx-error" class="docx-error-banner d-none"></div>
+        </div>
         {% elif is_word %}
-        <div class="doc-viewer-word-fallback">
-            <div class="doc-icon"><i class="bi bi-file-earmark-word"></i></div>
-            <h5 class="fw-bold mb-2">{{ title }}</h5>
-            <p class="text-muted small mb-3">Word documents cannot be previewed directly in all browsers.</p>
-            <div id="docx-preview" class="doc-viewer-word-preview mb-3"></div>
-            <div id="docx-loading" class="doc-viewer-loading d-none">Loading preview…</div>
-            <div class="d-flex gap-2 flex-wrap justify-content-center">
-                <a href="{{ file_url }}" target="_blank" class="btn btn-primary-custom btn-sm">
-                    <i class="bi bi-box-arrow-up-right"></i> Open in Tab
-                </a>
-                <a href="{{ download_url }}" class="btn btn-accent btn-sm">
-                    <i class="bi bi-download"></i> Download
-                </a>
-            </div>
+        <div class="docx-legacy-msg">
+            <p class="mb-3">This is an older <strong>.doc</strong> file. Browser preview needs <strong>.docx</strong>.</p>
+            <a href="{{ download_url }}" class="btn btn-accent btn-sm">
+                <i class="bi bi-download"></i> Download to open in Word
+            </a>
         </div>
         {% else %}
         <iframe src="{{ file_url }}" class="doc-viewer-frame" title="{{ title }}"></iframe>
@@ -124,26 +137,96 @@
 {% endblock %}
 
 {% block extra_js %}
-{% if is_word %}
-<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+{% if is_docx %}
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.3/dist/docx-preview.min.js"></script>
 <script>
 (function () {
-    var isDocx = {{ is_docx|yesno:"true,false" }};
-    if (!isDocx || typeof mammoth === 'undefined') return;
-    var preview = document.getElementById('docx-preview');
     var loading = document.getElementById('docx-loading');
-    if (!preview) return;
-    loading.classList.remove('d-none');
+    var preview = document.getElementById('docx-preview');
+    var errorEl = document.getElementById('docx-error');
+    var scrollEl = document.getElementById('docx-scroll');
+
+    function fitDocxPages() {
+        if (!preview || !scrollEl) return;
+        var pages = preview.querySelectorAll('section.docx');
+        if (!pages.length) return;
+        var avail = Math.max(280, scrollEl.clientWidth - 28);
+
+        pages.forEach(function (page) {
+            // reset before measuring
+            page.style.transform = 'none';
+            page.style.width = '';
+            var natural = Math.max(page.scrollWidth || 0, page.offsetWidth || 0, 794);
+            var naturalH = Math.max(page.scrollHeight || 0, page.offsetHeight || 0);
+            var scale = Math.min(1, avail / natural);
+            page.style.transformOrigin = 'top center';
+            page.style.transform = 'scale(' + scale + ')';
+
+            var holder = page.closest('.docx-page-fit');
+            if (!holder) {
+                holder = document.createElement('div');
+                holder.className = 'docx-page-fit';
+                holder.style.width = '100%';
+                holder.style.display = 'flex';
+                holder.style.justifyContent = 'center';
+                holder.style.overflow = 'visible';
+                if (page.parentNode) {
+                    page.parentNode.insertBefore(holder, page);
+                    holder.appendChild(page);
+                }
+            }
+            holder.style.height = Math.ceil(naturalH * scale) + 'px';
+            holder.style.marginBottom = '16px';
+        });
+    }
+
+    if (!preview || typeof docx === 'undefined' || !docx.renderAsync) {
+        if (loading) loading.classList.add('d-none');
+        if (errorEl) {
+            errorEl.classList.remove('d-none');
+            errorEl.innerHTML = 'Could not load document viewer. Please <a href="{{ download_url }}" class="link-light">download</a> the file.';
+        }
+        return;
+    }
     fetch('{{ file_url }}', { credentials: 'same-origin' })
-        .then(function (r) { return r.arrayBuffer(); })
-        .then(function (buf) { return mammoth.convertToHtml({ arrayBuffer: buf }); })
-        .then(function (result) {
-            preview.innerHTML = result.value;
-            loading.classList.add('d-none');
+        .then(function (r) {
+            if (!r.ok) throw new Error('Could not load file');
+            return r.arrayBuffer();
+        })
+        .then(function (buf) {
+            return docx.renderAsync(buf, preview, null, {
+                className: 'docx',
+                inWrapper: true,
+                ignoreWidth: false,
+                ignoreHeight: false,
+                breakPages: true,
+                renderHeaders: true,
+                renderFooters: true,
+                useBase64URL: true,
+            });
+        })
+        .then(function () {
+            if (loading) loading.classList.add('d-none');
+            // wait a tick for layout, then scale pages to fit width
+            requestAnimationFrame(function () {
+                fitDocxPages();
+                setTimeout(fitDocxPages, 50);
+            });
         })
         .catch(function () {
-            loading.classList.add('d-none');
+            if (loading) loading.classList.add('d-none');
+            if (errorEl) {
+                errorEl.classList.remove('d-none');
+                errorEl.innerHTML = 'Could not render this document. Please <a href="{{ download_url }}" class="link-light">download</a> to open in Word.';
+            }
         });
+
+    var resizeTimer;
+    window.addEventListener('resize', function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(fitDocxPages, 150);
+    });
 })();
 </script>
 {% endif %}

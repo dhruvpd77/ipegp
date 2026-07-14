@@ -256,21 +256,59 @@ class MarksheetDownloadForm(forms.Form):
         return cleaned
 
 
-class FacultyDutyAssignmentForm(forms.ModelForm):
+class FacultyDutyAssignmentForm(forms.Form):
+    subject = forms.ModelChoiceField(
+        queryset=Subject.objects.none(),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    internal_faculty = forms.ChoiceField(
+        choices=[],
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_ipe_internal_faculty'}),
+        label='Internal Faculty',
+    )
+    internal_faculty_other = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control text-uppercase',
+            'id': 'id_ipe_internal_other',
+            'placeholder': 'Enter internal faculty name in CAPITAL letters',
+        }),
+        label='Other Internal Faculty Name',
+    )
+    external_faculty_name = forms.CharField(
+        widget=forms.TextInput(attrs={
+            'class': 'form-control text-uppercase',
+            'placeholder': 'Enter external faculty name',
+        }),
+        label='External Faculty Name',
+    )
     batch = forms.ChoiceField(choices=[], widget=forms.Select(attrs={'class': 'form-select'}))
+    duty_date = forms.DateField(widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}))
+    time_slot = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 9:00 am to 10:30 am'}),
+    )
+    room_no = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 410-B'}),
+        label='Room No',
+    )
 
-    class Meta:
-        model = FacultyDutyAssignment
-        fields = ['exam_type', 'subject', 'faculty', 'duty_role', 'batch', 'duty_date', 'time_slot', 'room_no']
-        widgets = {
-            'exam_type': forms.Select(attrs={'class': 'form-select', 'id': 'id_duty_exam_type'}),
-            'subject': forms.Select(attrs={'class': 'form-select'}),
-            'faculty': forms.Select(attrs={'class': 'form-select'}),
-            'duty_role': forms.Select(attrs={'class': 'form-select'}),
-            'duty_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'time_slot': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 9:00 am to 10:30 am'}),
-            'room_no': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 410-B'}),
-        }
+    def clean_internal_faculty_other(self):
+        return (self.cleaned_data.get('internal_faculty_other') or '').strip().upper()
+
+    def clean_external_faculty_name(self):
+        return (self.cleaned_data.get('external_faculty_name') or '').strip().upper()
+
+    def clean(self):
+        cleaned = super().clean()
+        internal = cleaned.get('internal_faculty')
+        other = cleaned.get('internal_faculty_other')
+        if internal == 'OTHER' and not other:
+            self.add_error('internal_faculty_other', 'Enter the internal faculty name.')
+        elif not internal:
+            self.add_error('internal_faculty', 'Select internal faculty.')
+        return cleaned
 
 
 class GPDutyAssignmentForm(forms.Form):
@@ -357,11 +395,18 @@ class DutyScheduleUploadForm(forms.Form):
 class FinalMarksheetDownloadForm(forms.Form):
     exam_type = forms.ChoiceField(
         choices=[('IPE', 'IPE'), ('GP', 'GP')],
-        widget=forms.Select(attrs={'class': 'form-select'}),
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_final_ms_exam_type'}),
     )
     subject = forms.ModelChoiceField(
         queryset=Subject.objects.none(),
-        widget=forms.Select(attrs={'class': 'form-select'}),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_final_ms_subject'}),
+    )
+    subject_selection = forms.ChoiceField(
+        required=False,
+        choices=[],
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_final_ms_subject_selection'}),
+        label='GP Subject',
     )
     semester_label = forms.CharField(
         label='Semester Label',
@@ -381,6 +426,18 @@ class FinalMarksheetDownloadForm(forms.Form):
         required=False,
         initial='batch',
     )
+
+    def clean(self):
+        cleaned = super().clean()
+        exam_type = cleaned.get('exam_type')
+        if exam_type == 'IPE' and not cleaned.get('subject'):
+            self.add_error('subject', 'Select a subject for IPE.')
+        if exam_type == 'GP' and not cleaned.get('subject_selection'):
+            self.add_error('subject_selection', 'Select a GP subject.')
+        return cleaned
+
+
+FilledMarksheetDownloadForm = FinalMarksheetDownloadForm
 
 
 SYLLABUS_EXTENSIONS = ('.pdf', '.doc', '.docx')
@@ -606,3 +663,43 @@ class ExternalRegistrationFieldForm(forms.ModelForm):
             'is_required': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'order': forms.NumberInput(attrs={'class': 'form-control'}),
         }
+
+
+class IPEInvitationCreateForm(forms.Form):
+    excel_file = forms.FileField(
+        label='Excel — External Faculty List',
+        widget=forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.xlsx,.xls'}),
+        help_text='Columns: Name, Designation, College Name, City/State, Email',
+    )
+    letter_date = forms.CharField(
+        label='Date',
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g. 17 Feb. 2025',
+        }),
+    )
+    subject_line = forms.CharField(
+        label='Sub (Subject line)',
+        initial='Appointment as an External Examiner for conducting Internal Practical Examination of B.E. Semester-III',
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    practical_date = forms.CharField(
+        label='Date of Practical',
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g. 20 February 2025',
+        }),
+    )
+    branch = forms.CharField(
+        label='Branch',
+        initial='CE/IT/CSD/AIML/AIDS/RAI/CSE/CST/CSIT/CEA',
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    exam_time = forms.CharField(
+        label='Exam Time',
+        initial='9:00 am onwards',
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g. 9:00 am onwards',
+        }),
+    )

@@ -24,6 +24,7 @@ from .forms import (
     FacultyDutyAssignmentForm, FinalMarksheetDownloadForm, GPDutyAssignmentForm,
     SyllabusUploadForm, PaperUploadForm, DutyScheduleUploadForm,
     ExternalRegistrationFormCreateForm, ExternalRegistrationFieldForm,
+    IPEInvitationCreateForm,
 )
 from .external_form_utils import (
     build_external_registration_form, save_external_submission,
@@ -77,6 +78,10 @@ from .marksheet import (
     ensure_default_marksheet_template,
     save_duty_marks, build_duty_marksheet_page_context, get_duty_marks_status,
     can_edit_duty_marks, verify_and_lock_duty_marks,
+    save_gp_duty_marks, build_gp_duty_marksheet_page_context, get_gp_duty_marks_status,
+    can_edit_gp_duty_marks, verify_and_lock_gp_duty_marks,
+    pending_ipe_batches_for_filled_download, pending_gp_splits_for_filled_download,
+    user_can_edit_locked_marks,
 )
 from .models import (
     User, Semester, SemesterAdminAssignment, Department, DepartmentAdminAssignment,
@@ -86,6 +91,7 @@ from .models import (
     MarksheetTemplate, FacultyDutyAssignment, GPDutyAssignment, DutyScheduleUpload,
     SubjectSyllabus, SubjectPaper, FacultySubjectAssignment,
     ExternalRegistrationForm, ExternalRegistrationField, ExternalRegistrationSubmission,
+    IPEInvitationBatch, IPEInvitationFaculty, IPEInvitationSignature,
 )
 from .utils import (
     import_students_from_excel, import_faculty_from_excel,
@@ -1372,13 +1378,17 @@ def marksheet_templates(request):
                             return generate_marksheet_workbook(
                                 tmpl, dept, semester_label, department_label,
                                 subject_selection=sel,
+                                include_marks=False,
                             )
                 else:
                     tmpl = resolve_marksheet_template(exam_type, subject, dept)
                     if not tmpl:
                         messages.error(request, f'No {exam_type} marksheet template uploaded for {subject.name}. Please upload first.')
                     else:
-                        return generate_marksheet_workbook(tmpl, dept, semester_label, department_label)
+                        return generate_marksheet_workbook(
+                            tmpl, dept, semester_label, department_label,
+                            include_marks=False,
+                        )
             else:
                 messages.error(request, 'Select department, exam type, subject and fill all fields.')
 
@@ -1440,6 +1450,41 @@ def _group_faculty_duties(duties_qs):
     return [groups[key] for key in order]
 
 
+def _faculty_code_from_name(department, name, prefix='FAC'):
+    base = ''.join(ch for ch in (name or '').upper() if ch.isalnum())[:10] or prefix
+    code = base
+    counter = 1
+    while Faculty.objects.filter(department=department, mentor_code__iexact=code).exists():
+        counter += 1
+        code = f'{base}{counter}'
+    return code
+
+
+def _faculty_for_ipe_manual_name(department, name, *, is_external):
+    clean_name = (name or '').strip().upper()
+    if not clean_name:
+        return None
+    qs = Faculty.objects.filter(department=department, is_external=is_external)
+    faculty = qs.filter(name__iexact=clean_name).first()
+    if faculty:
+        return faculty
+    return Faculty.objects.create(
+        department=department,
+        name=clean_name,
+        mentor_code=_faculty_code_from_name(department, clean_name, prefix='EXT' if is_external else 'FAC'),
+        is_external=is_external,
+    )
+
+
+def _setup_ipe_duty_form(form, subjects, faculty_qs, batches):
+    form.fields['subject'].queryset = subjects
+    form.fields['batch'].choices = [(b, b) for b in batches]
+    choices = [('', '---------')]
+    choices += [(str(f.pk), f.name) for f in faculty_qs.filter(is_external=False).order_by('name')]
+    choices.append(('OTHER', 'Others (enter name)'))
+    form.fields['internal_faculty'].choices = choices
+
+
 @role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
 def faculty_duty_list(request):
     ctx = get_user_context(request.user)
@@ -1465,12 +1510,9 @@ def faculty_duty_list(request):
     else:
         batches = Student.objects.values_list('batch', flat=True).distinct().order_by('batch')
 
-    duty_form = FacultyDutyAssignmentForm(initial={'exam_type': 'IPE'})
+    duty_form = FacultyDutyAssignmentForm()
     upload_form = DutyScheduleUploadForm()
-    duty_form.fields['subject'].queryset = subjects
-    duty_form.fields['faculty'].queryset = faculty_qs
-    duty_form.fields['batch'].choices = [(b, b) for b in batches]
-    duty_form.fields['exam_type'].choices = [('IPE', 'IPE')]
+    _setup_ipe_duty_form(duty_form, subjects, faculty_qs, batches)
 
     external_without_login = Faculty.objects.none()
     recent_uploads = DutyScheduleUpload.objects.none()
@@ -1522,19 +1564,63 @@ def faculty_duty_list(request):
                 messages.error(request, 'Select a department first.')
             else:
                 duty_form = FacultyDutyAssignmentForm(request.POST)
-                duty_form.fields['subject'].queryset = subjects
-                duty_form.fields['faculty'].queryset = faculty_qs
-                duty_form.fields['batch'].choices = [(b, b) for b in batches]
+                _setup_ipe_duty_form(duty_form, subjects, faculty_qs, batches)
                 if duty_form.is_valid():
-                    duty = duty_form.save(commit=False)
-                    duty.department = dept
-                    duty.exam_type = FacultyDutyAssignment.ExamType.IPE
-                    duty.assigned_by = request.user
+                    internal_value = duty_form.cleaned_data['internal_faculty']
+                    if internal_value == 'OTHER':
+                        internal_faculty = _faculty_for_ipe_manual_name(
+                            dept,
+                            duty_form.cleaned_data['internal_faculty_other'],
+                            is_external=False,
+                        )
+                    else:
+                        internal_faculty = faculty_qs.filter(
+                            pk=internal_value, is_external=False,
+                        ).first()
+                    external_faculty = _faculty_for_ipe_manual_name(
+                        dept,
+                        duty_form.cleaned_data['external_faculty_name'],
+                        is_external=True,
+                    )
+                    common = {
+                        'department': dept,
+                        'subject': duty_form.cleaned_data['subject'],
+                        'exam_type': FacultyDutyAssignment.ExamType.IPE,
+                        'batch': duty_form.cleaned_data['batch'],
+                        'duty_date': duty_form.cleaned_data['duty_date'],
+                        'time_slot': duty_form.cleaned_data['time_slot'],
+                        'room_no': duty_form.cleaned_data['room_no'],
+                        'assigned_by': request.user,
+                        'is_active': True,
+                    }
                     try:
-                        duty.save()
-                        messages.success(request, f'Duty assigned to {duty.faculty.name} for {duty.batch}.')
+                        created_names = []
+                        for faculty, role in (
+                            (internal_faculty, FacultyDutyAssignment.DutyRole.INTERNAL),
+                            (external_faculty, FacultyDutyAssignment.DutyRole.EXTERNAL),
+                        ):
+                            duty, _ = FacultyDutyAssignment.objects.update_or_create(
+                                faculty=faculty,
+                                department=dept,
+                                subject=common['subject'],
+                                exam_type=common['exam_type'],
+                                batch=common['batch'],
+                                duty_date=common['duty_date'],
+                                duty_role=role,
+                                defaults={
+                                    'time_slot': common['time_slot'],
+                                    'room_no': common['room_no'],
+                                    'assigned_by': request.user,
+                                    'is_active': True,
+                                },
+                            )
+                            created_names.append(f'{faculty.name} ({duty.get_duty_role_display()})')
+                        messages.success(
+                            request,
+                            f'IPE duties assigned for {common["batch"]}: {", ".join(created_names)}.',
+                        )
                     except IntegrityError:
-                        messages.error(request, 'This faculty already has this duty assignment for that date.')
+                        messages.error(request, 'This duty assignment already exists for that date.')
                     return redirect(f'{reverse("portal:faculty_duty_list")}?department={dept.pk}')
                 messages.error(request, 'Please fix duty assignment errors.')
 
@@ -1596,12 +1682,13 @@ def _setup_gp_duty_form(form, dept, faculty_qs, subject_selection=''):
     subjects = Subject.objects.filter(
         Q(semester=dept.semester, department__isnull=True) | Q(department=dept)
     )
-    subject_options = build_gp_subject_selection_options(list(subjects))
+    subject_options = build_gp_download_subject_options(list(subjects))
     form.fields['subject_selection'].choices = [
         ('', '— Select subject —'),
     ] + [(o['value'], o['label']) for o in subject_options]
 
-    split_options = list_formation_split_options(dept, subject_selection) if subject_selection else []
+    formation_sel = formation_key_for_selection(dept, subject_selection) if subject_selection else ''
+    split_options = list_formation_split_options(dept, formation_sel) if formation_sel else []
     form.fields['split_choice'].choices = [
         ('', '— Select split —'),
     ] + [(o['value'], o['label']) for o in split_options]
@@ -1642,11 +1729,10 @@ def faculty_duty_gp(request):
         subjects = Subject.objects.filter(
             Q(semester=dept.semester, department__isnull=True) | Q(department=dept)
         )
-        subject_options = build_gp_subject_selection_options(list(subjects))
+        subject_options = build_gp_download_subject_options(list(subjects))
         if subject_options:
             subject_selection = subject_options[0]['value']
 
-    gp_form = GPDutyAssignmentForm()
     if editing:
         split_value = f'{editing.batch}|{editing.split_index}'
         internal_val = str(editing.internal_faculty_id) if editing.internal_faculty_id else (
@@ -1661,11 +1747,53 @@ def faculty_duty_gp(request):
             'duty_date': editing.duty_date,
             'room_no': editing.room_no,
         })
+    else:
+        gp_form = GPDutyAssignmentForm(initial={
+            'subject_selection': subject_selection,
+        })
     _setup_gp_duty_form(gp_form, dept, faculty_qs, subject_selection)
 
     assignments = GPDutyAssignment.objects.filter(
         department=dept, is_active=True,
-    ).select_related('internal_faculty', 'subject').order_by('-duty_date', 'batch', 'split_index')
+    ).select_related('internal_faculty', 'external_faculty', 'subject').order_by(
+        '-duty_date', 'batch', 'split_index',
+    )
+
+    external_without_login = Faculty.objects.filter(
+        department=dept, is_external=True, user__isnull=True,
+    ).filter(
+        Q(gp_external_duties__department=dept, gp_external_duties__is_active=True)
+        | Q(duty_assignments__department=dept, duty_assignments__is_active=True),
+    ).distinct()
+
+    if request.method == 'POST' and request.POST.get('form_type') == 'generate_gp_external_credentials' and dept:
+        creds = []
+        gp_externals = Faculty.objects.filter(
+            department=dept, is_external=True, user__isnull=True,
+            gp_external_duties__department=dept, gp_external_duties__is_active=True,
+        ).distinct()
+        for fac in gp_externals:
+            username = fac.mentor_code or f'ext_{fac.pk}'
+            password = Faculty.generate_password()
+            user = User.objects.create_user(
+                username=username, password=password,
+                role=User.Role.FACULTY, first_name=fac.name,
+            )
+            fac.user = user
+            fac.credentials_generated = True
+            fac.save()
+            GeneratedCredential.objects.create(
+                user=user, plain_password=password, generated_by=request.user,
+            )
+            creds.append([user.username, password, fac.name, 'External Examiner (GP)'])
+        if request.POST.get('download') == '1' and creds:
+            return export_credentials_excel(creds, 'gp_external_examiner_credentials.xlsx')
+        if creds:
+            messages.success(request, f'Generated login for {len(creds)} GP external examiner(s).')
+        else:
+            messages.info(request, 'All GP external examiners already have login credentials.')
+        url = reverse('portal:faculty_duty_gp')
+        return redirect(f'{url}?department={dept.pk}')
 
     if request.method == 'POST' and request.POST.get('form_type') == 'save_gp_duty':
         gp_form = GPDutyAssignmentForm(request.POST)
@@ -1676,8 +1804,9 @@ def faculty_duty_gp(request):
             if not batch or split_idx is None:
                 messages.error(request, 'Select a valid group split.')
             else:
+                formation_sel = formation_key_for_selection(dept, sel)
                 split_lookup = {
-                    o['value']: o for o in list_formation_split_options(dept, sel)
+                    o['value']: o for o in list_formation_split_options(dept, formation_sel)
                 }
                 split_meta = split_lookup.get(gp_form.cleaned_data['split_choice'], {})
                 primary_subject = primary_subject_for_selection(dept, sel)
@@ -1687,13 +1816,20 @@ def faculty_duty_gp(request):
                     internal_val = gp_form.cleaned_data['internal_faculty']
                     if internal_val == 'OTHER':
                         internal_other = gp_form.cleaned_data['internal_faculty_other']
-                        internal_faculty = None
+                        internal_faculty = _faculty_for_ipe_manual_name(
+                            dept, internal_other, is_external=False,
+                        ) if internal_other else None
                     elif internal_val:
                         internal_faculty = faculty_qs.filter(pk=internal_val).first()
                         internal_other = ''
                     else:
                         internal_faculty = None
                         internal_other = ''
+
+                    external_name = gp_form.cleaned_data['external_faculty_name']
+                    external_faculty = _faculty_for_ipe_manual_name(
+                        dept, external_name, is_external=True,
+                    ) if external_name else None
 
                     post_edit_pk = request.POST.get('edit_pk')
                     if post_edit_pk:
@@ -1707,8 +1843,9 @@ def faculty_duty_gp(request):
                     duty.split_index = split_idx
                     duty.group_ids = split_meta.get('group_ids', [])
                     duty.internal_faculty = internal_faculty
-                    duty.internal_faculty_other = internal_other
-                    duty.external_faculty_name = gp_form.cleaned_data['external_faculty_name']
+                    duty.internal_faculty_other = ''
+                    duty.external_faculty_name = external_name
+                    duty.external_faculty = external_faculty
                     duty.duty_date = gp_form.cleaned_data['duty_date']
                     duty.room_no = gp_form.cleaned_data['room_no']
                     duty.assigned_by = request.user
@@ -1733,6 +1870,7 @@ def faculty_duty_gp(request):
         'editing': editing,
         'subject_selection': subject_selection,
         'subject_label': subject_label,
+        'external_without_login': external_without_login,
         **dept_filter_context(request.user, ctx, request, dept),
     })
 
@@ -1757,56 +1895,184 @@ def faculty_duty_gp_delete(request, pk):
 
 @role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
 def final_marksheet_download(request):
+    """Hard copy marksheet templates — blank sheets without faculty-entered marks."""
     ctx = get_user_context(request.user)
     dept = resolve_department(request.user, ctx, request)
     download_form = FinalMarksheetDownloadForm()
+    subject_selection_options = []
     if dept:
-        download_form.fields['subject'].queryset = Subject.objects.filter(
+        subjects = Subject.objects.filter(
             Q(semester=dept.semester, department__isnull=True) | Q(department=dept)
         )
+        download_form.fields['subject'].queryset = subjects
+        subject_selection_options = build_gp_download_subject_options(list(subjects))
+        if subject_selection_options:
+            download_form.fields['subject_selection'].choices = [
+                (opt['value'], opt['label']) for opt in subject_selection_options
+            ]
         download_form.fields['semester_label'].initial = dept.sheet_semester_label or (dept.semester.name if dept.semester else '')
         download_form.fields['department_label'].initial = dept.sheet_department_label or dept.name
 
     if request.method == 'POST' and dept:
         download_form = FinalMarksheetDownloadForm(request.POST)
-        download_form.fields['subject'].queryset = Subject.objects.filter(
+        subjects = Subject.objects.filter(
             Q(semester=dept.semester, department__isnull=True) | Q(department=dept)
         )
+        download_form.fields['subject'].queryset = subjects
+        subject_selection_options = build_gp_download_subject_options(list(subjects))
+        if subject_selection_options:
+            download_form.fields['subject_selection'].choices = [
+                (opt['value'], opt['label']) for opt in subject_selection_options
+            ]
         if download_form.is_valid():
             exam_type = download_form.cleaned_data['exam_type']
-            subject = download_form.cleaned_data['subject']
+            subject = download_form.cleaned_data.get('subject')
+            semester_label = download_form.cleaned_data['semester_label']
+            department_label = download_form.cleaned_data['department_label']
+            dept.sheet_semester_label = semester_label
+            dept.sheet_department_label = department_label
+            dept.save(update_fields=['sheet_semester_label', 'sheet_department_label'])
+            combined = download_form.cleaned_data.get('download_type') == 'combined'
+
+            if exam_type == 'GP':
+                from .group_formation import primary_subject_for_selection
+                sel = download_form.cleaned_data.get('subject_selection') or subject_selection_for_subject(dept, subject)
+                formation_sel = formation_key_for_selection(dept, sel)
+                gp_subject = primary_subject_for_selection(dept, sel) or subject
+                if not sel:
+                    messages.error(request, 'Select a GP subject.')
+                elif not get_formation(dept, formation_sel):
+                    messages.error(request, 'Configure Group Formations for this GP subject before downloading.')
+                else:
+                    tmpl = resolve_marksheet_template(exam_type, gp_subject, dept)
+                    if not tmpl:
+                        messages.error(request, f'No GP marksheet template for {gp_subject.name}. Upload template first.')
+                    else:
+                        return generate_marksheet_workbook(
+                            tmpl, dept, semester_label, department_label,
+                            combined=False, subject_selection=sel, include_marks=False,
+                        )
+            else:
+                tmpl = resolve_marksheet_template(exam_type, subject, dept)
+                if not tmpl:
+                    messages.error(request, f'No {exam_type} marksheet template for {subject.name}. Upload template first.')
+                else:
+                    return generate_marksheet_workbook(
+                        tmpl, dept, semester_label, department_label,
+                        combined=combined, include_marks=False,
+                    )
+        else:
+            messages.error(request, 'Please check the form — some fields are missing or invalid.')
+
+    return render(request, 'portal/marksheet/final_download.html', {
+        'download_form': download_form,
+        'subject_selection_options': subject_selection_options,
+        **dept_filter_context(request.user, ctx, request, dept),
+    })
+
+
+@role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
+def filled_marksheet_download(request):
+    """Marks-filled marksheet — only after verify & lock for each batch / GP split."""
+    ctx = get_user_context(request.user)
+    dept = resolve_department(request.user, ctx, request)
+    download_form = FinalMarksheetDownloadForm()
+    subject_selection_options = []
+    if dept:
+        subjects = Subject.objects.filter(
+            Q(semester=dept.semester, department__isnull=True) | Q(department=dept)
+        )
+        download_form.fields['subject'].queryset = subjects
+        subject_selection_options = build_gp_download_subject_options(list(subjects))
+        if subject_selection_options:
+            download_form.fields['subject_selection'].choices = [
+                (opt['value'], opt['label']) for opt in subject_selection_options
+            ]
+        download_form.fields['semester_label'].initial = dept.sheet_semester_label or (dept.semester.name if dept.semester else '')
+        download_form.fields['department_label'].initial = dept.sheet_department_label or dept.name
+
+    if request.method == 'POST' and dept:
+        download_form = FinalMarksheetDownloadForm(request.POST)
+        subjects = Subject.objects.filter(
+            Q(semester=dept.semester, department__isnull=True) | Q(department=dept)
+        )
+        download_form.fields['subject'].queryset = subjects
+        subject_selection_options = build_gp_download_subject_options(list(subjects))
+        if subject_selection_options:
+            download_form.fields['subject_selection'].choices = [
+                (opt['value'], opt['label']) for opt in subject_selection_options
+            ]
+        if download_form.is_valid():
+            exam_type = download_form.cleaned_data['exam_type']
+            subject = download_form.cleaned_data.get('subject')
             semester_label = download_form.cleaned_data['semester_label']
             department_label = download_form.cleaned_data['department_label']
             action = request.POST.get('action', 'filled')
             dept.sheet_semester_label = semester_label
             dept.sheet_department_label = department_label
             dept.save(update_fields=['sheet_semester_label', 'sheet_department_label'])
-            tmpl = resolve_marksheet_template(exam_type, subject, dept)
-            if action == 'compiled':
-                return generate_compiled_marksheet_workbook(
-                    exam_type, subject, dept, semester_label, department_label, template=tmpl,
-                )
             combined = download_form.cleaned_data.get('download_type') == 'combined'
-            if not tmpl:
-                messages.error(request, f'No {exam_type} marksheet template for {subject.name}. Upload template first.')
-            elif exam_type == 'GP':
-                sel = subject_selection_for_subject(dept, subject)
-                if not get_formation(dept, sel):
+
+            if exam_type == 'GP':
+                from .group_formation import primary_subject_for_selection
+                sel = download_form.cleaned_data.get('subject_selection') or subject_selection_for_subject(dept, subject)
+                formation_sel = formation_key_for_selection(dept, sel)
+                gp_subject = primary_subject_for_selection(dept, sel) or subject
+                if not sel:
+                    messages.error(request, 'Select a GP subject.')
+                elif not get_formation(dept, formation_sel):
                     messages.error(request, 'Configure Group Formations for this GP subject before downloading.')
                 else:
-                    return generate_marksheet_workbook(
-                        tmpl, dept, semester_label, department_label,
-                        combined=False, subject_selection=sel,
-                    )
+                    pending = pending_gp_splits_for_filled_download(dept, gp_subject, sel)
+                    if pending:
+                        messages.warning(
+                            request,
+                            'Cannot download — these GP splits are still pending '
+                            '(marks must be verified & locked): '
+                            + ', '.join(pending),
+                        )
+                    else:
+                        tmpl = resolve_marksheet_template(exam_type, gp_subject, dept)
+                        if not tmpl:
+                            messages.error(request, f'No GP marksheet template for {gp_subject.name}. Upload template first.')
+                        elif action == 'compiled':
+                            return generate_compiled_marksheet_workbook(
+                                exam_type, gp_subject, dept, semester_label, department_label,
+                                template=tmpl, subject_selection=sel,
+                            )
+                        else:
+                            return generate_marksheet_workbook(
+                                tmpl, dept, semester_label, department_label,
+                                combined=False, subject_selection=sel, include_marks=True,
+                            )
             else:
-                return generate_marksheet_workbook(
-                    tmpl, dept, semester_label, department_label, combined=combined,
-                )
+                pending = pending_ipe_batches_for_filled_download(dept, subject)
+                if pending:
+                    messages.warning(
+                        request,
+                        'Cannot download — these batches are still pending '
+                        '(marks must be verified & locked): '
+                        + ', '.join(pending),
+                    )
+                else:
+                    tmpl = resolve_marksheet_template(exam_type, subject, dept)
+                    if not tmpl:
+                        messages.error(request, f'No {exam_type} marksheet template for {subject.name}. Upload template first.')
+                    elif action == 'compiled':
+                        return generate_compiled_marksheet_workbook(
+                            exam_type, subject, dept, semester_label, department_label, template=tmpl,
+                        )
+                    else:
+                        return generate_marksheet_workbook(
+                            tmpl, dept, semester_label, department_label,
+                            combined=combined, include_marks=True,
+                        )
         else:
             messages.error(request, 'Please check the form — some fields are missing or invalid.')
 
-    return render(request, 'portal/marksheet/final_download.html', {
+    return render(request, 'portal/marksheet/filled_download.html', {
         'download_form': download_form,
+        'subject_selection_options': subject_selection_options,
         **dept_filter_context(request.user, ctx, request, dept),
     })
 
@@ -2010,14 +2276,35 @@ def faculty_papers(request):
     })
 
 
-def _faculty_can_access_document(faculty_dept, obj):
-    if not obj.is_active:
+def _user_can_access_document(user, obj):
+    """Faculty: own dept scope. Admins: any active syllabus/paper in their scope."""
+    if not obj or not obj.is_active:
         return False
-    if obj.semester_id != faculty_dept.semester_id:
-        return False
-    if obj.department_id and obj.department_id != faculty_dept.pk:
-        return False
-    return True
+    if user.is_superuser or user.role == User.Role.SUPER_ADMIN:
+        return True
+    if user.role == User.Role.SEMESTER_ADMIN:
+        try:
+            sem = user.semester_admin_assignment.semester
+        except Exception:
+            return False
+        return obj.semester_id == sem.pk
+    if user.role == User.Role.DEPARTMENT_ADMIN:
+        try:
+            dept = user.department_admin_assignment.department
+        except Exception:
+            return False
+        if obj.semester_id != dept.semester_id:
+            return False
+        if obj.department_id and obj.department_id != dept.pk:
+            return False
+        return True
+    if user.role == User.Role.FACULTY:
+        try:
+            dept = user.faculty_profile.department
+        except Exception:
+            return False
+        return _faculty_can_access_document(dept, obj)
+    return False
 
 
 def _document_content_type(filename):
@@ -2032,28 +2319,27 @@ def _document_content_type(filename):
     return guessed or 'application/octet-stream'
 
 
-def _serve_faculty_document(request, obj, faculty_dept):
-    if not _faculty_can_access_document(faculty_dept, obj):
+def _serve_document_file(request, obj):
+    if not _user_can_access_document(request.user, obj):
         return HttpResponseForbidden('Access denied.')
-    filename = obj.file.name.split('/')[-1]
-    inline = request.GET.get('download') != '1'
-    response = FileResponse(
-        obj.file.open('rb'),
-        content_type=_document_content_type(filename),
-        as_attachment=not inline,
-        filename=filename,
-    )
-    if inline:
-        response['Content-Disposition'] = f'inline; filename="{filename}"'
+    filename = (obj.file.name or 'document').split('/')[-1]
+    force_download = request.GET.get('download') == '1'
+    content_type = _document_content_type(filename)
+    response = FileResponse(obj.file.open('rb'), content_type=content_type)
+    safe_name = filename.replace('"', '')
+    if force_download:
+        response['Content-Disposition'] = f'attachment; filename="{safe_name}"'
+    else:
+        response['Content-Disposition'] = f'inline; filename="{safe_name}"'
+    response['X-Content-Type-Options'] = 'nosniff'
     return response
 
 
-def _faculty_document_view_context(request, obj, doc_type, back_url_name):
-    dept = request.user.faculty_profile.department
-    if not _faculty_can_access_document(dept, obj):
+def _document_view_context(request, obj, doc_type, back_url_name):
+    if not _user_can_access_document(request.user, obj):
         messages.error(request, 'You do not have access to this document.')
         return None
-    filename = obj.file.name.lower()
+    filename = (obj.file.name or '').lower()
     is_pdf = filename.endswith('.pdf')
     file_pk = obj.pk
     if doc_type == 'paper':
@@ -2073,36 +2359,60 @@ def _faculty_document_view_context(request, obj, doc_type, back_url_name):
     }
 
 
-@role_required(User.Role.FACULTY)
+def _faculty_can_access_document(faculty_dept, obj):
+    if not obj.is_active:
+        return False
+    if obj.semester_id != faculty_dept.semester_id:
+        return False
+    if obj.department_id and obj.department_id != faculty_dept.pk:
+        return False
+    return True
+
+
+@role_required(
+    User.Role.FACULTY, User.Role.DEPARTMENT_ADMIN,
+    User.Role.SEMESTER_ADMIN, User.Role.SUPER_ADMIN,
+)
 def faculty_paper_view(request, pk):
     paper = get_object_or_404(SubjectPaper, pk=pk, is_active=True)
-    ctx = _faculty_document_view_context(request, paper, 'paper', 'portal:faculty_papers')
+    back = 'portal:faculty_papers' if request.user.role == User.Role.FACULTY else 'portal:syllabus_papers_manage'
+    ctx = _document_view_context(request, paper, 'paper', back)
     if ctx is None:
-        return redirect('portal:faculty_papers')
+        return redirect(back)
     return render(request, 'portal/faculty/document_view.html', ctx)
 
 
-@role_required(User.Role.FACULTY)
+@role_required(
+    User.Role.FACULTY, User.Role.DEPARTMENT_ADMIN,
+    User.Role.SEMESTER_ADMIN, User.Role.SUPER_ADMIN,
+)
 @xframe_options_sameorigin
 def faculty_paper_file(request, pk):
     paper = get_object_or_404(SubjectPaper, pk=pk, is_active=True)
-    return _serve_faculty_document(request, paper, request.user.faculty_profile.department)
+    return _serve_document_file(request, paper)
 
 
-@role_required(User.Role.FACULTY)
+@role_required(
+    User.Role.FACULTY, User.Role.DEPARTMENT_ADMIN,
+    User.Role.SEMESTER_ADMIN, User.Role.SUPER_ADMIN,
+)
 def faculty_syllabus_view(request, pk):
     syllabus = get_object_or_404(SubjectSyllabus, pk=pk, is_active=True)
-    ctx = _faculty_document_view_context(request, syllabus, 'syllabus', 'portal:faculty_syllabus')
+    back = 'portal:faculty_syllabus' if request.user.role == User.Role.FACULTY else 'portal:syllabus_papers_manage'
+    ctx = _document_view_context(request, syllabus, 'syllabus', back)
     if ctx is None:
-        return redirect('portal:faculty_syllabus')
+        return redirect(back)
     return render(request, 'portal/faculty/document_view.html', ctx)
 
 
-@role_required(User.Role.FACULTY)
+@role_required(
+    User.Role.FACULTY, User.Role.DEPARTMENT_ADMIN,
+    User.Role.SEMESTER_ADMIN, User.Role.SUPER_ADMIN,
+)
 @xframe_options_sameorigin
 def faculty_syllabus_file(request, pk):
     syllabus = get_object_or_404(SubjectSyllabus, pk=pk, is_active=True)
-    return _serve_faculty_document(request, syllabus, request.user.faculty_profile.department)
+    return _serve_document_file(request, syllabus)
 
 
 # ─── Form Templates ───
@@ -2580,11 +2890,75 @@ def mark_entry_list(request):
     duties = FacultyDutyAssignment.objects.filter(
         faculty=faculty, is_active=True,
     ).select_related('subject', 'department').order_by('-duty_date', 'batch')
+    gp_duties = GPDutyAssignment.objects.filter(
+        is_active=True,
+    ).filter(
+        Q(internal_faculty=faculty) | Q(external_faculty=faculty),
+    ).select_related('subject', 'department', 'internal_faculty', 'external_faculty').order_by(
+        '-duty_date', 'batch', 'split_index',
+    )
     sessions = ExamSession.objects.filter(department=faculty.department, is_active=True)
     return render(request, 'portal/faculty/mark_entry_list.html', {
         'duties': duties,
+        'gp_duties': gp_duties,
         'sessions': sessions,
         'faculty': faculty,
+    })
+
+
+@role_required(User.Role.FACULTY)
+def mark_entry_gp_duty(request, duty_pk):
+    faculty = request.user.faculty_profile
+    gp_duty = get_object_or_404(
+        GPDutyAssignment.objects.select_related('subject', 'department'),
+        pk=duty_pk,
+        is_active=True,
+    )
+    if faculty.pk not in (gp_duty.internal_faculty_id, gp_duty.external_faculty_id):
+        from django.http import Http404
+        raise Http404
+
+    from .marksheet import _gp_duty_students_in_group_order
+    students, _ = _gp_duty_students_in_group_order(gp_duty)
+
+    if request.method == 'POST':
+        if not can_edit_gp_duty_marks(request.user, gp_duty):
+            messages.error(request, 'Marks are verified and locked. You cannot edit them.')
+            return redirect('portal:mark_entry_gp_duty', duty_pk=duty_pk)
+
+        action = request.POST.get('action', 'save')
+        save_gp_duty_marks(gp_duty, request.POST, students, request.user)
+        gp_duty.refresh_from_db()
+
+        if action == 'verify_lock':
+            if gp_duty.marks_locked:
+                messages.info(request, 'Marks are already verified and locked.')
+            elif get_gp_duty_marks_status(gp_duty) != 'completed':
+                messages.warning(
+                    request,
+                    'Marks saved, but verify & lock requires all student entries to be complete.',
+                )
+            else:
+                verify_and_lock_gp_duty_marks(gp_duty, request.user)
+                messages.success(
+                    request,
+                    'Marks verified and locked. You can no longer edit them.',
+                )
+                return redirect('portal:mark_entry_gp_duty', duty_pk=duty_pk)
+        else:
+            status = get_gp_duty_marks_status(gp_duty)
+            if status == 'completed':
+                messages.success(request, 'Marks saved successfully. Status: Completed.')
+            else:
+                messages.success(
+                    request,
+                    'Marks saved successfully. Status: Pending — complete all student entries.',
+                )
+        return redirect('portal:mark_entry_gp_duty', duty_pk=duty_pk)
+
+    return render(request, 'portal/faculty/mark_entry_gp_duty.html', {
+        **build_gp_duty_marksheet_page_context(gp_duty),
+        'read_only': not can_edit_gp_duty_marks(request.user, gp_duty),
     })
 
 
@@ -2595,7 +2969,6 @@ def mark_entry_duty(request, duty_pk):
         pk=duty_pk,
         faculty=request.user.faculty_profile,
         is_active=True,
-        duty_role=FacultyDutyAssignment.DutyRole.INTERNAL,
     )
     students = sort_students_by_roll(Student.objects.filter(
         department=duty.department, batch=duty.batch,
@@ -2642,6 +3015,35 @@ def mark_entry_duty(request, duty_pk):
     })
 
 
+def _ipe_duties_in_scope(user, ctx, dept=None):
+    """IPE duties (internal + external faculty) in admin scope."""
+    qs = FacultyDutyAssignment.objects.filter(
+        is_active=True,
+        exam_type=FacultyDutyAssignment.ExamType.IPE,
+    ).select_related('faculty', 'subject', 'department')
+    if dept:
+        qs = qs.filter(department=dept)
+    elif user.role == User.Role.SEMESTER_ADMIN and ctx.get('semester'):
+        qs = qs.filter(department__semester=ctx['semester'])
+    elif user.role == User.Role.DEPARTMENT_ADMIN and ctx.get('department'):
+        qs = qs.filter(department=ctx['department'])
+    return qs.order_by('-duty_date', 'batch', 'subject__name', 'duty_role')
+
+
+def _gp_duties_in_scope(user, ctx, dept=None):
+    """GP split duties in admin scope."""
+    qs = GPDutyAssignment.objects.filter(
+        is_active=True,
+    ).select_related('internal_faculty', 'external_faculty', 'subject', 'department')
+    if dept:
+        qs = qs.filter(department=dept)
+    elif user.role == User.Role.SEMESTER_ADMIN and ctx.get('semester'):
+        qs = qs.filter(department__semester=ctx['semester'])
+    elif user.role == User.Role.DEPARTMENT_ADMIN and ctx.get('department'):
+        qs = qs.filter(department=ctx['department'])
+    return qs.order_by('-duty_date', 'batch', 'split_index')
+
+
 def _internal_duties_in_scope(user, ctx, dept=None):
     qs = FacultyDutyAssignment.objects.filter(
         is_active=True,
@@ -2663,32 +3065,50 @@ def admin_marks_entry(request):
     exam_type = request.GET.get('exam_type', '').strip()
     subject_id = request.GET.get('subject', '').strip()
 
-    duties_qs = FacultyDutyAssignment.objects.none()
     subjects = Subject.objects.none()
+    duty_rows = []
     if dept:
-        duties_qs = _internal_duties_in_scope(request.user, ctx, dept)
         subjects = _subjects_for_dept_scope(dept, request.user, ctx)
-        if exam_type in ('IPE', 'GP'):
-            duties_qs = duties_qs.filter(exam_type=exam_type)
-        if subject_id.isdigit():
-            duties_qs = duties_qs.filter(subject_id=int(subject_id))
+        subject_pk = int(subject_id) if subject_id.isdigit() else None
 
-    duty_options = list(duties_qs)
-    duty_rows = [
-        {
-            'duty': d,
-            'marks_status': get_duty_marks_status(d),
-            'can_edit': can_edit_duty_marks(request.user, d),
-        }
-        for d in duty_options
-    ]
+        if exam_type in ('', 'IPE'):
+            ipe_qs = _ipe_duties_in_scope(request.user, ctx, dept)
+            if subject_pk:
+                ipe_qs = ipe_qs.filter(subject_id=subject_pk)
+            for d in ipe_qs:
+                duty_rows.append({
+                    'kind': 'ipe',
+                    'duty': d,
+                    'marks_status': get_duty_marks_status(d),
+                    # Dept admin: View only on Marks Entry. Semester/Super Admin: Edit (even if locked).
+                    'can_edit': user_can_edit_locked_marks(request.user),
+                    'is_locked': bool(d.marks_locked),
+                })
+
+        if exam_type in ('', 'GP'):
+            gp_qs = _gp_duties_in_scope(request.user, ctx, dept)
+            if subject_pk:
+                gp_qs = gp_qs.filter(subject_id=subject_pk)
+            for g in gp_qs:
+                duty_rows.append({
+                    'kind': 'gp',
+                    'gp_duty': g,
+                    'marks_status': get_gp_duty_marks_status(g),
+                    'can_edit': user_can_edit_locked_marks(request.user),
+                    'is_locked': bool(g.marks_locked),
+                })
+
+        duty_rows.sort(
+            key=lambda r: r['gp_duty'].duty_date if r['kind'] == 'gp' else r['duty'].duty_date,
+            reverse=True,
+        )
 
     return render(request, 'portal/admin/marks_entry.html', {
         'exam_type': exam_type,
         'selected_subject': subject_id,
         'subjects': subjects,
-        'duty_options': duty_options,
         'duty_rows': duty_rows,
+        'elevated_admin': user_can_edit_locked_marks(request.user),
         **dept_filter_context(request.user, ctx, request, dept),
     })
 
@@ -2699,7 +3119,7 @@ def admin_marks_entry_view(request, duty_pk):
         FacultyDutyAssignment,
         pk=duty_pk,
         is_active=True,
-        duty_role=FacultyDutyAssignment.DutyRole.INTERNAL,
+        exam_type=FacultyDutyAssignment.ExamType.IPE,
     )
     ctx = get_user_context(request.user)
     if not _department_in_scope(request.user, ctx, duty.department):
@@ -2710,10 +3130,10 @@ def admin_marks_entry_view(request, duty_pk):
         department=duty.department, batch=duty.batch,
     ))
     if request.method == 'POST':
-        if not can_edit_duty_marks(request.user, duty):
+        if not user_can_edit_locked_marks(request.user):
             messages.error(
                 request,
-                'Marks are verified and locked. Only semester admin or super admin can edit.',
+                'Only Semester Admin or Super Admin can edit marks from Marks Entry.',
             )
             return redirect('portal:admin_marks_entry_view', duty_pk=duty_pk)
 
@@ -2728,12 +3148,57 @@ def admin_marks_entry_view(request, duty_pk):
             )
         return redirect('portal:admin_marks_entry_view', duty_pk=duty_pk)
 
-    can_edit = can_edit_duty_marks(request.user, duty)
+    # Marks Entry policy: Department Admin = view only; Semester/Super = edit (including locked)
+    can_edit = user_can_edit_locked_marks(request.user)
     back_qs = f'?department={duty.department_id}&exam_type={duty.exam_type}&subject={duty.subject_id}'
     return render(request, 'portal/faculty/mark_entry_duty.html', {
         **build_duty_marksheet_page_context(duty),
         'read_only': not can_edit,
         'viewing_faculty': duty.faculty,
+        'is_admin_entry': True,
+        'back_url': reverse('portal:admin_marks_entry') + back_qs,
+    })
+
+
+@role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
+def admin_marks_entry_gp_view(request, duty_pk):
+    gp_duty = get_object_or_404(
+        GPDutyAssignment.objects.select_related('subject', 'department', 'internal_faculty', 'external_faculty'),
+        pk=duty_pk,
+        is_active=True,
+    )
+    ctx = get_user_context(request.user)
+    if not _department_in_scope(request.user, ctx, gp_duty.department):
+        from django.http import Http404 as _Http404
+        raise _Http404
+
+    from .marksheet import _gp_duty_students_in_group_order
+    students, _ = _gp_duty_students_in_group_order(gp_duty)
+
+    if request.method == 'POST':
+        if not user_can_edit_locked_marks(request.user):
+            messages.error(
+                request,
+                'Only Semester Admin or Super Admin can edit marks from Marks Entry.',
+            )
+            return redirect('portal:admin_marks_entry_gp_view', duty_pk=duty_pk)
+
+        save_gp_duty_marks(gp_duty, request.POST, students, request.user)
+        status = get_gp_duty_marks_status(gp_duty)
+        if status == 'completed':
+            messages.success(request, 'Marks saved successfully. Status: Completed.')
+        else:
+            messages.success(
+                request,
+                'Marks saved successfully. Status: Pending — complete all student entries.',
+            )
+        return redirect('portal:admin_marks_entry_gp_view', duty_pk=duty_pk)
+
+    can_edit = user_can_edit_locked_marks(request.user)
+    back_qs = f'?department={gp_duty.department_id}&exam_type=GP&subject={gp_duty.subject_id}'
+    return render(request, 'portal/faculty/mark_entry_gp_duty.html', {
+        **build_gp_duty_marksheet_page_context(gp_duty),
+        'read_only': not can_edit,
         'is_admin_entry': True,
         'back_url': reverse('portal:admin_marks_entry') + back_qs,
     })
@@ -3463,3 +3928,248 @@ def external_submission_detail(request, pk):
         'submission': submission,
         'field_rows': field_rows,
     })
+
+
+# ─── IPE Invitation Letters ─────────────────────────────────────────────────
+
+def _invitation_subjects_for_user(user, ctx, dept):
+    if dept:
+        return _subjects_for_department(dept).order_by('name')
+    semester = ctx.get('semester') or resolve_semester(user, ctx)
+    if semester:
+        return Subject.objects.filter(semester=semester).order_by('name')
+    if user.is_superuser or user.role == User.Role.SUPER_ADMIN:
+        return Subject.objects.all().order_by('name')
+    return Subject.objects.none()
+
+
+def _invitation_redirect(subject=None, dept=None, batch=None):
+    url = reverse('portal:ipe_invitation_letter')
+    params = []
+    if dept:
+        params.append(f'department={dept.pk}')
+    if subject:
+        params.append(f'subject={subject.pk}')
+    if batch:
+        params.append(f'batch={batch.pk if hasattr(batch, "pk") else batch}')
+    if params:
+        url = f'{url}?{"&".join(params)}'
+    return redirect(url)
+
+
+def _save_invitation_signature_from_upload(sig_obj, uploaded_file, user):
+    sig_obj.signature.save(uploaded_file.name, uploaded_file, save=False)
+    sig_obj.updated_by = user
+    sig_obj.save()
+
+
+def _save_invitation_signature_from_data_url(sig_obj, data_url, user):
+    """Save a canvas data-URL (PNG) as the signature image."""
+    import base64
+    from django.core.files.base import ContentFile
+
+    if not data_url or not data_url.startswith('data:image'):
+        raise ValueError('Invalid signature drawing.')
+    header, b64 = data_url.split(',', 1)
+    raw = base64.b64decode(b64)
+    filename = 'drawn_signature.png'
+    if 'jpeg' in header or 'jpg' in header:
+        filename = 'drawn_signature.jpg'
+    if sig_obj.signature:
+        sig_obj.signature.delete(save=False)
+    sig_obj.signature.save(filename, ContentFile(raw), save=False)
+    sig_obj.updated_by = user
+    sig_obj.save()
+
+
+@role_required(User.Role.DEPARTMENT_ADMIN, User.Role.SEMESTER_ADMIN, User.Role.SUPER_ADMIN)
+def ipe_invitation_letter(request):
+    """Subject-scoped invitation letters: select subject → signature / Excel / PDF."""
+    from .invitation_letter import parse_invitation_excel
+
+    ctx = get_user_context(request.user)
+    dept = resolve_department(request.user, ctx, request)
+    subjects = _invitation_subjects_for_user(request.user, ctx, dept)
+    selected_subject = None
+    subject_id = request.GET.get('subject') or request.POST.get('subject_id')
+    if subject_id:
+        selected_subject = subjects.filter(pk=subject_id).first()
+
+    form = IPEInvitationCreateForm()
+    selected_batch = None
+    batch_id = request.GET.get('batch') or request.POST.get('batch_id')
+    signature = IPEInvitationSignature.get_for_subject(selected_subject) if selected_subject else None
+
+    if request.method == 'POST':
+        action = request.POST.get('form_type', 'create')
+        post_subject_id = request.POST.get('subject_id')
+        if post_subject_id:
+            selected_subject = subjects.filter(pk=post_subject_id).first()
+            signature = IPEInvitationSignature.get_for_subject(selected_subject) if selected_subject else None
+
+        if action == 'save_signature':
+            if not selected_subject or not signature:
+                messages.error(request, 'Select a subject first.')
+                return _invitation_redirect(dept=dept)
+            signature.advisor_title = (request.POST.get('advisor_title') or 'Advisor').strip() or 'Advisor'
+            signature.advisor_name = (request.POST.get('advisor_name') or '(Mr Rohit Patel)').strip() or '(Mr Rohit Patel)'
+            uploaded = request.FILES.get('signature_file')
+            drawn = (request.POST.get('signature_data') or '').strip()
+            try:
+                if uploaded:
+                    if signature.signature:
+                        signature.signature.delete(save=False)
+                    _save_invitation_signature_from_upload(signature, uploaded, request.user)
+                    messages.success(request, f'Signature saved for {selected_subject.name}.')
+                elif drawn:
+                    _save_invitation_signature_from_data_url(signature, drawn, request.user)
+                    messages.success(request, f'Drawn signature saved for {selected_subject.name}.')
+                else:
+                    signature.updated_by = request.user
+                    signature.save()
+                    messages.success(request, 'Advisor name saved.')
+            except Exception as exc:
+                messages.error(request, f'Could not save signature: {exc}')
+            return _invitation_redirect(subject=selected_subject, dept=dept)
+
+        if action == 'clear_signature':
+            if not selected_subject or not signature:
+                messages.error(request, 'Select a subject first.')
+                return _invitation_redirect(dept=dept)
+            if signature.signature:
+                signature.signature.delete(save=False)
+                signature.signature = ''
+                signature.updated_by = request.user
+                signature.save()
+            messages.success(request, 'Signature cleared.')
+            return _invitation_redirect(subject=selected_subject, dept=dept)
+
+        if action == 'delete_batch':
+            pk = request.POST.get('batch_id')
+            batch = get_object_or_404(IPEInvitationBatch, pk=pk)
+            if (
+                request.user.role == User.Role.DEPARTMENT_ADMIN
+                and batch.department_id
+                and ctx.get('department')
+                and batch.department_id != ctx['department'].pk
+            ):
+                messages.error(request, 'You do not have permission to delete this batch.')
+                return _invitation_redirect(subject=selected_subject, dept=dept)
+            batch.delete()
+            messages.success(request, 'Invitation batch deleted.')
+            return _invitation_redirect(subject=selected_subject, dept=dept)
+
+        if not selected_subject:
+            messages.error(request, 'Select a subject first, then upload the Excel.')
+            return _invitation_redirect(dept=dept)
+
+        form = IPEInvitationCreateForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                rows = parse_invitation_excel(form.cleaned_data['excel_file'])
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            except Exception:
+                messages.error(request, 'Could not read the Excel file. Please check the format.')
+            else:
+                department = dept or ctx.get('department')
+                subject_name = selected_subject.name
+                if selected_subject.code:
+                    subject_name = f'{selected_subject.name}'
+                batch = IPEInvitationBatch.objects.create(
+                    subject=selected_subject,
+                    department=department,
+                    letter_date=form.cleaned_data['letter_date'],
+                    subject_line=form.cleaned_data['subject_line'],
+                    subject_name=subject_name,
+                    practical_date=form.cleaned_data['practical_date'],
+                    branch=form.cleaned_data['branch'],
+                    exam_time=form.cleaned_data['exam_time'],
+                    excel_file=form.cleaned_data['excel_file'],
+                    created_by=request.user,
+                )
+                IPEInvitationFaculty.objects.bulk_create([
+                    IPEInvitationFaculty(
+                        batch=batch,
+                        name=row['name'],
+                        designation=row['designation'],
+                        college_name=row['college_name'],
+                        city_state=row['city_state'],
+                        email=row['email'],
+                        sort_order=i,
+                    )
+                    for i, row in enumerate(rows)
+                ])
+                messages.success(
+                    request,
+                    f'Created invitation letters for {len(rows)} external examiner(s) — {selected_subject.name}.',
+                )
+                return _invitation_redirect(subject=selected_subject, dept=dept, batch=batch)
+
+    batches = IPEInvitationBatch.objects.prefetch_related('faculties').select_related('subject')
+    if selected_subject:
+        batches = batches.filter(subject=selected_subject)
+    else:
+        batches = batches.none()
+
+    if request.user.role == User.Role.DEPARTMENT_ADMIN and ctx.get('department'):
+        batches = batches.filter(
+            Q(department=ctx['department']) | Q(department__isnull=True)
+        )
+
+    if batch_id and selected_subject:
+        selected_batch = batches.filter(pk=batch_id).first()
+    if selected_batch is None and batches.exists():
+        selected_batch = batches.first()
+
+    return render(request, 'portal/invitation/letter.html', {
+        'form': form,
+        'batches': batches,
+        'selected_batch': selected_batch,
+        'signature': signature,
+        'subjects': subjects,
+        'selected_subject': selected_subject,
+        **dept_filter_context(request.user, ctx, request, dept),
+    })
+
+
+@role_required(User.Role.DEPARTMENT_ADMIN, User.Role.SEMESTER_ADMIN, User.Role.SUPER_ADMIN)
+def ipe_invitation_pdf(request, pk):
+    """Download a single faculty invitation letter as PDF."""
+    from .invitation_letter import invitation_pdf_response
+
+    faculty = get_object_or_404(
+        IPEInvitationFaculty.objects.select_related('batch', 'batch__department', 'batch__subject'),
+        pk=pk,
+    )
+    ctx = get_user_context(request.user)
+    if (
+        request.user.role == User.Role.DEPARTMENT_ADMIN
+        and ctx.get('department')
+        and faculty.batch.department_id
+        and faculty.batch.department_id != ctx['department'].pk
+    ):
+        messages.error(request, 'You do not have access to this invitation letter.')
+        return redirect('portal:ipe_invitation_letter')
+    return invitation_pdf_response(faculty.batch, faculty)
+
+
+@role_required(User.Role.DEPARTMENT_ADMIN, User.Role.SEMESTER_ADMIN, User.Role.SUPER_ADMIN)
+def ipe_thanks_pdf(request, pk):
+    """Download a single faculty thank-you letter as PDF."""
+    from .invitation_letter import thanks_pdf_response
+
+    faculty = get_object_or_404(
+        IPEInvitationFaculty.objects.select_related('batch', 'batch__department', 'batch__subject'),
+        pk=pk,
+    )
+    ctx = get_user_context(request.user)
+    if (
+        request.user.role == User.Role.DEPARTMENT_ADMIN
+        and ctx.get('department')
+        and faculty.batch.department_id
+        and faculty.batch.department_id != ctx['department'].pk
+    ):
+        messages.error(request, 'You do not have access to this thank-you letter.')
+        return redirect('portal:ipe_invitation_letter')
+    return thanks_pdf_response(faculty.batch, faculty)

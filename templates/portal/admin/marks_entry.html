@@ -2,7 +2,7 @@
 {% block title %}Marks Entry{% endblock %}
 {% block content %}
 
-{% include 'portal/includes/section_header.html' with icon='table' title='Marks Entry' subtitle='View and edit marksheets for internal faculty — select batch and faculty from your scope' %}
+{% include 'portal/includes/section_header.html' with icon='table' title='Marks Entry' subtitle='View marksheets as Department Admin — Semester Admin / Super Admin can edit (including locked)' %}
 
 {% if show_dept_filter %}
 <div class="filter-bar mb-3 flex-wrap">
@@ -18,8 +18,20 @@
 </div>
 {% else %}
 
+{% if elevated_admin %}
+<div class="alert alert-info py-2 small mb-3">
+    <i class="bi bi-pencil-square me-1"></i>
+    You can <strong>Edit</strong> marks (including verified &amp; locked duties).
+</div>
+{% else %}
+<div class="alert alert-secondary py-2 small mb-3">
+    <i class="bi bi-eye me-1"></i>
+    Department Admin can <strong>View</strong> only. Editing is available to Semester Admin and Super Admin.
+</div>
+{% endif %}
+
 <div class="portal-card mb-4">
-    <div class="portal-card-header"><i class="bi bi-funnel"></i> Select Batch & Faculty</div>
+    <div class="portal-card-header"><i class="bi bi-funnel"></i> Select Exam & Subject</div>
     <div class="portal-card-body">
         <form method="get" class="d-flex align-items-center gap-3 flex-wrap">
             {% if show_dept_filter %}
@@ -48,8 +60,8 @@
 
 <div class="portal-card">
     <div class="portal-card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-person-check"></i> Internal Faculty Duties</span>
-        <span class="small opacity-75">{{ duty_options|length }} assignment{{ duty_options|length|pluralize }}</span>
+        <span><i class="bi bi-person-check"></i> Faculty Duties</span>
+        <span class="small opacity-75">{{ duty_rows|length }} assignment{{ duty_rows|length|pluralize }}</span>
     </div>
     <div class="portal-card-body p-0">
         <div class="table-responsive">
@@ -59,9 +71,10 @@
                         <th>Date</th>
                         <th>Type</th>
                         <th>Subject</th>
-                        <th>Batch</th>
+                        <th>Batch / Split</th>
                         <th>Internal Faculty</th>
-                        <th>Time</th>
+                        <th>External Faculty</th>
+                        <th>Role</th>
                         <th>Room</th>
                         <th>Status</th>
                         <th>Last Saved</th>
@@ -71,14 +84,30 @@
                 </thead>
                 <tbody>
                 {% for row in duty_rows %}
+                {% if row.kind == 'ipe' %}
                 {% with d=row.duty %}
                 <tr>
                     <td>{{ d.duty_date|date:"d M Y" }}</td>
-                    <td><span class="badge {% if d.exam_type == 'IPE' %}badge-ipe{% else %}badge-gp{% endif %}">{{ d.exam_type }}</span></td>
+                    <td><span class="badge badge-ipe">{{ d.exam_type }}</span></td>
                     <td class="fw-semibold">{{ d.subject.name }}</td>
                     <td><span class="badge bg-primary">{{ d.batch }}</span></td>
-                    <td><i class="bi bi-person-badge text-muted me-1"></i>{{ d.faculty.name }}</td>
-                    <td class="small text-muted">{{ d.time_slot|default:"—" }}</td>
+                    <td>
+                        {% if d.duty_role == 'INTERNAL' %}
+                        <i class="bi bi-person-badge text-muted me-1"></i>{{ d.faculty.name }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if d.duty_role == 'EXTERNAL' %}
+                        <i class="bi bi-person-badge text-muted me-1"></i>{{ d.faculty.name }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if d.duty_role == 'INTERNAL' %}
+                        <span class="badge bg-info text-dark">Internal</span>
+                        {% else %}
+                        <span class="badge bg-secondary">External</span>
+                        {% endif %}
+                    </td>
                     <td class="small">{{ d.room_no|default:"—" }}</td>
                     <td>
                         {% if row.marks_status == 'completed' %}
@@ -91,36 +120,71 @@
                         {% endif %}
                     </td>
                     <td class="small text-muted">
-                        {% if d.marks_saved_at %}
-                        {{ d.marks_saved_at|date:"d M Y, h:i A" }}
-                        {% else %}
-                        —
-                        {% endif %}
+                        {% if d.marks_saved_at %}{{ d.marks_saved_at|date:"d M Y, h:i A" }}{% else %}—{% endif %}
                     </td>
                     <td class="small text-muted">
-                        {% if d.marks_locked_at %}
-                        {{ d.marks_locked_at|date:"d M Y, h:i A" }}
-                        {% else %}
-                        —
-                        {% endif %}
+                        {% if d.marks_locked_at %}{{ d.marks_locked_at|date:"d M Y, h:i A" }}{% else %}—{% endif %}
                     </td>
                     <td>
-                        <a href="{% url 'portal:admin_marks_entry_view' d.pk %}" class="btn btn-sm btn-accent">
+                        <a href="{% url 'portal:admin_marks_entry_view' d.pk %}" class="btn btn-sm {% if row.can_edit %}btn-primary-custom{% else %}btn-accent{% endif %}">
                             {% if row.can_edit %}
-                            <i class="bi bi-pencil-square"></i> View / Edit Marks
+                            <i class="bi bi-pencil-square"></i> Edit
                             {% else %}
-                            <i class="bi bi-eye"></i> View Marks
+                            <i class="bi bi-eye"></i> View
                             {% endif %}
                         </a>
                     </td>
                 </tr>
                 {% endwith %}
+                {% else %}
+                {% with g=row.gp_duty %}
+                <tr>
+                    <td>{{ g.duty_date|date:"d M Y" }}</td>
+                    <td><span class="badge badge-gp">GP</span></td>
+                    <td class="fw-semibold">{{ g.subject.name }}</td>
+                    <td><code class="small">{{ g.split_display }}</code></td>
+                    <td><i class="bi bi-person-badge text-muted me-1"></i>{{ g.internal_display_name }}</td>
+                    <td>
+                        {% if g.external_faculty_name or g.external_faculty %}
+                        <i class="bi bi-person-badge text-muted me-1"></i>{{ g.external_faculty_name|default:g.external_faculty.name }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td><span class="badge bg-primary">GP Split</span></td>
+                    <td class="small">{{ g.room_no|default:"—" }}</td>
+                    <td>
+                        {% if row.marks_status == 'completed' %}
+                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Completed</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Pending</span>
+                        {% endif %}
+                        {% if g.marks_locked %}
+                        <span class="badge bg-secondary ms-1"><i class="bi bi-lock-fill me-1"></i>Locked</span>
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted">
+                        {% if g.marks_saved_at %}{{ g.marks_saved_at|date:"d M Y, h:i A" }}{% else %}—{% endif %}
+                    </td>
+                    <td class="small text-muted">
+                        {% if g.marks_locked_at %}{{ g.marks_locked_at|date:"d M Y, h:i A" }}{% else %}—{% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'portal:admin_marks_entry_gp_view' g.pk %}" class="btn btn-sm {% if row.can_edit %}btn-primary-custom{% else %}btn-accent{% endif %}">
+                            {% if row.can_edit %}
+                            <i class="bi bi-pencil-square"></i> Edit
+                            {% else %}
+                            <i class="bi bi-eye"></i> View
+                            {% endif %}
+                        </a>
+                    </td>
+                </tr>
+                {% endwith %}
+                {% endif %}
                 {% empty %}
                 <tr>
-                    <td colspan="11" class="text-center text-muted py-4">
-                        No internal faculty duties found for this selection.
+                    <td colspan="12" class="text-center text-muted py-4">
+                        No faculty duties found for this selection.
                         {% if not exam_type and not selected_subject %}
-                        Try filtering by exam type or subject.
+                        Try filtering by exam type or subject, or assign duties from Faculty Duty IPE / Faculty Duty GP.
                         {% endif %}
                     </td>
                 </tr>

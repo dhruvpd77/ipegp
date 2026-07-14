@@ -22,9 +22,28 @@
                 <div class="alert alert-warning mb-0">Select a department first.</div>
                 {% else %}
                 <p class="small text-muted mb-3">
-                    Select a practical GP subject, then choose a saved group split from
+                    Select a GP subject, then choose a saved group split from
                     <a href="{% url 'portal:group_formations' %}?department={{ department.pk }}">Group Formations</a>.
                 </p>
+
+                {% if external_without_login %}
+                <div class="alert alert-info py-2 small mb-3">
+                    <div class="fw-semibold mb-1">External Examiners — No Login Yet</div>
+                    <ul class="mb-2">
+                    {% for f in external_without_login %}
+                        <li>{{ f.name }} <span class="text-muted">({{ f.mentor_code }})</span></li>
+                    {% endfor %}
+                    </ul>
+                    <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="generate_gp_external_credentials">
+                        {% if show_dept_filter %}<input type="hidden" name="department" value="{{ department.pk }}">{% endif %}
+                        <button type="submit" class="btn btn-sm btn-primary-custom"><i class="bi bi-key"></i> Generate Logins</button>
+                        <button type="submit" name="download" value="1" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download"></i> Generate &amp; Download</button>
+                    </form>
+                </div>
+                {% endif %}
+
                 <form method="post" id="gpDutyForm">
                     {% csrf_token %}
                     <input type="hidden" name="form_type" value="save_gp_duty">
@@ -34,7 +53,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold" for="{{ gp_form.subject_selection.id_for_label }}">GP Subject</label>
                         {{ gp_form.subject_selection }}
-                        <div class="form-text">Practical subjects are combined (same as Group Formations).</div>
+                        <div class="form-text">Each subject is listed individually (same as marksheet downloads).</div>
                     </div>
 
                     <div class="mb-3">

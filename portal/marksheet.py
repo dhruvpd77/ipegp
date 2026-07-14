@@ -11,7 +11,10 @@ from django.utils import timezone
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from .models import ExamSession, FacultyDutyAssignment, MarkEntry, MarksheetTemplate, Student, User
+from .models import (
+    ExamSession, FacultyDutyAssignment, GPDutyAssignment, MarkEntry,
+    MarksheetTemplate, Student, User,
+)
 from .utils import roll_no_sort_key, sort_students_by_roll
 
 
@@ -39,6 +42,106 @@ def get_marks_by_batch(department, subject, exam_type, batch):
             ).select_related('student')
         }
     return {}
+
+
+def get_gp_marks_for_split(department, subject, batch, split_index):
+    """Load mark entries for a GP duty split (batch + split_index)."""
+    from .models import GPDutyAssignment
+
+    duty = GPDutyAssignment.objects.filter(
+        department=department,
+        subject=subject,
+        batch=batch,
+        split_index=split_index,
+        is_active=True,
+    ).order_by('-updated_at').first()
+    if not duty:
+        return {}
+    return {
+        m.student_id: m
+        for m in MarkEntry.objects.filter(gp_duty_assignment=duty).select_related('student')
+    }
+
+
+def pending_ipe_batches_for_filled_download(department, subject):
+    """
+    Batches that are not verified & locked for IPE filled download.
+    Uses internal faculty duty when present; otherwise any active IPE duty for that batch.
+    """
+    from .models import FacultyDutyAssignment
+
+    batches = list(
+        Student.objects.filter(department=department)
+        .exclude(batch='')
+        .values_list('batch', flat=True)
+        .distinct()
+        .order_by('batch')
+    )
+    pending = []
+    for batch in batches:
+        duties = FacultyDutyAssignment.objects.filter(
+            department=department,
+            subject=subject,
+            exam_type=FacultyDutyAssignment.ExamType.IPE,
+            batch=batch,
+            is_active=True,
+        )
+        internal = duties.filter(duty_role=FacultyDutyAssignment.DutyRole.INTERNAL).first()
+        duty = internal or duties.first()
+        if not duty or not duty.marks_locked:
+            pending.append(batch)
+    return pending
+
+
+def pending_gp_splits_for_filled_download(department, subject, subject_selection=None):
+    """
+    Formation splits that are not verified & locked for GP filled download.
+    Returns human-readable labels like 'A1 Split 1 (A1_1, A1_2)'.
+    """
+    from .group_formation import (
+        formation_key_for_selection,
+        formation_sheet_title,
+        get_formation,
+        resolve_subject_selection,
+    )
+    from .models import GPDutyAssignment
+
+    group_selection = resolve_subject_selection(
+        department, subject=subject, subject_selection=subject_selection or '',
+    )
+    formation_selection = formation_key_for_selection(department, group_selection)
+    formation = get_formation(department, formation_selection)
+    if not formation or not formation.batches_config:
+        return ['No group formation splits configured']
+
+    pending = []
+    for batch in sorted(formation.batches_config.keys()):
+        batch_cfg = formation.batches_config.get(batch) or {}
+        for split in sorted(batch_cfg.get('splits') or [], key=lambda s: s.get('index', 0)):
+            idx = split.get('index', 1)
+            gids = split.get('group_ids') or []
+            if not gids:
+                continue
+            duty = GPDutyAssignment.objects.filter(
+                department=department,
+                subject=subject,
+                batch=batch,
+                split_index=idx,
+                is_active=True,
+            ).first()
+            if not duty:
+                # Also try match by subject_selection on duty
+                duty = GPDutyAssignment.objects.filter(
+                    department=department,
+                    batch=batch,
+                    split_index=idx,
+                    is_active=True,
+                    subject_selection__in=[group_selection, formation_selection],
+                ).first()
+            label = f'{batch} Split {idx} ({formation_sheet_title(gids)})'
+            if not duty or not duty.marks_locked:
+                pending.append(label)
+    return pending
 
 
 def _cell_value_from_mark(col_def, mark_entry):
@@ -787,8 +890,14 @@ def _build_gp_marksheet_sheet(
     subject_name, subject_code,
     marks_by_student=None,
     group_id_map=None,
+    group_entries=None,
+    compiled=False,
 ):
-    """Build one GP marksheet sheet per formation split (attendance-style group layout)."""
+    """
+    Build one GP marksheet sheet.
+    - Normal: groups from one batch/split.
+    - Compiled: pass group_entries=[{batch, group, gid}, ...] for all batches/splits on one sheet.
+    """
     from .attendance_sheet import (
         GP_FILL_DIV,
         GP_FILL_GROUP_ALT,
@@ -819,6 +928,12 @@ def _build_gp_marksheet_sheet(
     from .models import GPGroupMemberDetail
 
     marks_by_student = marks_by_student or {}
+    if group_entries is None:
+        group_entries = []
+        for g in (groups or []):
+            gid = (group_id_map or {}).get(g)
+            group_entries.append({'batch': batch_name, 'group': g, 'gid': gid})
+
     last_col = schema['last_col']
     last_letter = get_column_letter(last_col)
     hr = schema['header_row']
@@ -830,9 +945,11 @@ def _build_gp_marksheet_sheet(
         c['col'] for c in schema['columns']
         if c['key'] in ('group_id', 'gender_diversity', 'religion_diversity', 'case')
     }
+    div_col = next((c['col'] for c in schema['columns'] if c['key'] == 'div'), 2)
 
     ws.sheet_view.showGridLines = True
 
+    title = 'COMPILE GP Marksheet' if compiled else GP_MARKSHEET_TITLE
     _merge_and_style(ws, f'A1:{last_letter}1', 'L. J. University', font=FONT_GP_BOLD, fill=GP_FILL_PEACH)
     _merge_and_style(
         ws, f'A2:{last_letter}2',
@@ -844,7 +961,7 @@ def _build_gp_marksheet_sheet(
         f'Semester - {semester_label}   {department_label} Department',
         font=FONT_GP_BOLD, fill=GP_FILL_PEACH,
     )
-    _merge_and_style(ws, f'A4:{last_letter}4', GP_MARKSHEET_TITLE, font=FONT_GP_BOLD, fill=FILL_GREY)
+    _merge_and_style(ws, f'A4:{last_letter}4', title, font=FONT_GP_BOLD, fill=FILL_GREY)
 
     date_start_col = get_column_letter(max(last_col - 5, 7))
     _merge_and_style(
@@ -873,15 +990,20 @@ def _build_gp_marksheet_sheet(
 
     _build_gp_marksheet_headers(ws, schema, last_col)
 
-    all_batches = {batch_name}
-    light, dark = _batch_palette(batch_name, all_batches)
+    all_batches = {e['batch'] for e in group_entries if e.get('batch')}
     data_row = data_start
     sr_no = 1
     merge_ranges = []
     group_end_rows = []
+    batch_merge_ranges = []  # (start_row, end_row, batch_name)
     group_idx = 0
+    current_batch = None
+    batch_start_row = None
 
-    for group in groups:
+    for entry in group_entries:
+        group = entry['group']
+        entry_batch = entry.get('batch') or batch_name
+        light, dark = _batch_palette(entry_batch, all_batches or {entry_batch})
         group_idx += 1
         details = list(group.member_details.select_related('student').order_by('student__roll_no'))
         if not details:
@@ -890,9 +1012,18 @@ def _build_gp_marksheet_sheet(
         if not details:
             continue
 
-        gid = (group_id_map or {}).get(group)
+        if current_batch is None:
+            current_batch = entry_batch
+            batch_start_row = data_row
+        elif entry_batch != current_batch:
+            if batch_start_row is not None and data_row - 1 >= batch_start_row:
+                batch_merge_ranges.append((batch_start_row, data_row - 1, current_batch))
+            current_batch = entry_batch
+            batch_start_row = data_row
+
+        gid = entry.get('gid')
         if not gid:
-            gid = _read_group_id(group) or f'{batch_name}_{group_idx}'
+            gid = (group_id_map or {}).get(group) or _read_group_id(group) or f'{entry_batch}_{group_idx}'
         gender_code = gp_gender_diversity_code(group)
         religion_code = gp_religion_diversity_code(group)
         case_code = gp_case_code(group)
@@ -911,7 +1042,7 @@ def _build_gp_marksheet_sheet(
             for col_def in schema['columns']:
                 col = col_def['col']
                 val = _gp_group_value(
-                    col_def, group, mem_idx, sr_no, batch_name, gid,
+                    col_def, group, mem_idx, sr_no, entry_batch, gid,
                     gender_code, religion_code, case_code, student, mark_entry,
                 )
                 if val is None:
@@ -968,12 +1099,17 @@ def _build_gp_marksheet_sheet(
                 merge_ranges.append((start_row, end_row, col))
             group_end_rows.append(end_row)
 
+    if current_batch is not None and batch_start_row is not None and data_row - 1 >= batch_start_row:
+        batch_merge_ranges.append((batch_start_row, data_row - 1, current_batch))
+
     data_end = data_row - 1
-    div_col = next((c['col'] for c in schema['columns'] if c['key'] == 'div'), 2)
     if data_end >= data_start:
-        ws.merge_cells(start_row=data_start, start_column=div_col, end_row=data_end, end_column=div_col)
-        div_cell = ws.cell(data_start, div_col, batch_name)
-        _style_cell(div_cell, fill=GP_FILL_DIV, alignment=ALIGN_CENTER)
+        if not batch_merge_ranges:
+            batch_merge_ranges = [(data_start, data_end, batch_name)]
+        for start_row, end_row, bname in batch_merge_ranges:
+            ws.merge_cells(start_row=start_row, start_column=div_col, end_row=end_row, end_column=div_col)
+            div_cell = ws.cell(start_row, div_col, bname)
+            _style_cell(div_cell, fill=GP_FILL_DIV, alignment=ALIGN_CENTER)
 
     for start_row, end_row, col in merge_ranges:
         ws.merge_cells(start_row=start_row, start_column=col, end_row=end_row, end_column=col)
@@ -1009,7 +1145,6 @@ def _build_gp_marksheet_sheet(
     if data_end >= data_start:
         _autofit_gp_marksheet_columns(ws, schema, data_start=data_start, data_end=data_end)
         _autofit_gp_row_heights(ws, name_col, header_row=hr, data_start=data_start, data_end=data_end, notes_row=7)
-        # Header block (3 rows) needs enough height for wrapped multi-line labels.
         ws.row_dimensions[hr].height = 30
         ws.row_dimensions[schema.get('mark_row', hr + 1)].height = 26
         ws.row_dimensions[schema.get('marks_sub_row', hr + 2)].height = 58
@@ -1023,6 +1158,7 @@ def generate_gp_marksheet_workbook(
     semester_label,
     department_label,
     subject_selection=None,
+    include_marks=True,
 ):
     """GP marksheet — one sheet per saved formation split (group layout like attendance)."""
     from .group_formation import (
@@ -1050,16 +1186,24 @@ def generate_gp_marksheet_workbook(
         department, formation_selection, group_subject_selection=group_selection,
     ):
         marks_by_student = {}
-        for group in groups:
-            details = list(group.member_details.select_related('student'))
-            if not details:
-                for m in group.members.all():
-                    details.append(type('Detail', (), {'student': m})())
-            for detail in details:
-                stu = detail.student
-                marks_by_student.update(
-                    get_marks_by_batch(department, template.subject, template.exam_type, stu.batch),
-                )
+        if include_marks:
+            marks_by_student = get_gp_marks_for_split(
+                department, template.subject, batch, split_index,
+            )
+            if not marks_by_student:
+                # Fallback to IPE-style batch marks if any
+                for group in groups:
+                    details = list(group.member_details.select_related('student'))
+                    if not details:
+                        for m in group.members.all():
+                            details.append(type('Detail', (), {'student': m})())
+                    for detail in details:
+                        stu = detail.student
+                        marks_by_student.update(
+                            get_marks_by_batch(
+                                department, template.subject, template.exam_type, stu.batch,
+                            ),
+                        )
 
         unique_title = sheet_title
         suffix = 2
@@ -1089,7 +1233,84 @@ def generate_gp_marksheet_workbook(
     wb.save(output)
     output.seek(0)
     safe = (template.subject.code or template.subject.name).replace(' ', '_')
-    filename = f'Marksheet_GP_{safe}_{department.name}.xlsx'
+    kind = 'Filled' if include_marks else 'HardCopy'
+    filename = f'Marksheet_GP_{kind}_{safe}_{department.name}.xlsx'
+    response = HttpResponse(
+        output.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+def generate_compiled_gp_marksheet_workbook(
+    template,
+    department,
+    semester_label,
+    department_label,
+    subject_selection=None,
+    include_marks=True,
+):
+    """
+    COMPILE GP marksheet — all batches and all formation splits on a single sheet
+    (same group layout as filled marksheet, not multi-tab).
+    """
+    from .group_formation import (
+        formation_key_for_selection,
+        iter_formation_sheets,
+        primary_subject_for_selection,
+        resolve_subject_selection,
+    )
+
+    schema = _ensure_schema(template)
+    group_selection = resolve_subject_selection(
+        department, subject=template.subject, subject_selection=subject_selection,
+    )
+    formation_selection = formation_key_for_selection(department, group_selection)
+    display_subject = primary_subject_for_selection(department, group_selection) or template.subject
+    subject_name = display_subject.name if display_subject else 'GP'
+    subject_code = (display_subject.code or '') if display_subject else ''
+
+    group_entries = []
+    marks_by_student = {}
+    for _title, batch, split_index, groups, group_to_gid in iter_formation_sheets(
+        department, formation_selection, group_subject_selection=group_selection,
+    ):
+        if include_marks:
+            marks_by_student.update(
+                get_gp_marks_for_split(department, template.subject, batch, split_index)
+            )
+        for group in groups:
+            group_entries.append({
+                'batch': batch,
+                'group': group,
+                'gid': group_to_gid.get(group),
+            })
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'COMPILE'
+    if not group_entries:
+        ws.cell(
+            1, 1,
+            'No group formation splits found. Configure splits under Group Formations first.',
+        )
+    else:
+        _build_gp_marksheet_sheet(
+            ws, schema, [], '',
+            semester_label, department_label,
+            subject_name, subject_code,
+            marks_by_student=marks_by_student,
+            group_entries=group_entries,
+            compiled=True,
+        )
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    safe = (template.subject.code or template.subject.name).replace(' ', '_')
+    kind = 'Filled' if include_marks else 'HardCopy'
+    filename = f'Compile_Marksheet_GP_{kind}_{safe}_{department.name}.xlsx'
     response = HttpResponse(
         output.read(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -1105,12 +1326,14 @@ def generate_marksheet_workbook(
     department_label,
     combined=False,
     subject_selection=None,
+    include_marks=True,
 ):
     """Generate marksheet Excel — one sheet per batch, or formation splits for GP."""
     if template.exam_type == 'GP':
         return generate_gp_marksheet_workbook(
             template, department, semester_label, department_label,
             subject_selection=subject_selection,
+            include_marks=include_marks,
         )
 
     schema = _ensure_schema(template)
@@ -1125,10 +1348,11 @@ def generate_marksheet_workbook(
     if combined:
         all_students = sort_students_by_roll(students_qs)
         marks_by_student = {}
-        for batch in batches:
-            marks_by_student.update(
-                get_marks_by_batch(department, template.subject, template.exam_type, batch)
-            )
+        if include_marks:
+            for batch in batches:
+                marks_by_student.update(
+                    get_marks_by_batch(department, template.subject, template.exam_type, batch)
+                )
         ws = wb.create_sheet(title='COMBINE')
         _build_batch_sheet(
             ws, schema, 'ALL', all_students, template.subject,
@@ -1138,9 +1362,11 @@ def generate_marksheet_workbook(
     else:
         for batch in batches:
             batch_students = sort_students_by_roll(students_qs.filter(batch=batch))
-            marks_by_student = get_marks_by_batch(
-                department, template.subject, template.exam_type, batch,
-            )
+            marks_by_student = {}
+            if include_marks:
+                marks_by_student = get_marks_by_batch(
+                    department, template.subject, template.exam_type, batch,
+                )
             ws = wb.create_sheet(title=str(batch)[:31])
             _build_batch_sheet(
                 ws, schema, batch, batch_students, template.subject,
@@ -1151,8 +1377,9 @@ def generate_marksheet_workbook(
     wb.save(output)
     output.seek(0)
     safe = (template.subject.code or template.subject.name).replace(' ', '_')
+    kind = 'Filled' if include_marks else 'HardCopy'
     suffix = '_COMBINE' if combined else ''
-    filename = f'Marksheet_{template.exam_type}_{safe}_{department.name}{suffix}.xlsx'
+    filename = f'Marksheet_{template.exam_type}_{kind}_{safe}_{department.name}{suffix}.xlsx'
     response = HttpResponse(
         output.read(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -1362,8 +1589,19 @@ def generate_compiled_marksheet_workbook(
     semester_label,
     department_label,
     template=None,
+    subject_selection=None,
 ):
-    """COMPILE marksheet — all batches on one sheet with aim, late, and total only."""
+    """COMPILE marksheet — all batches (IPE) or all GP splits on one sheet."""
+    if exam_type == 'GP':
+        tmpl = template or resolve_marksheet_template(exam_type, subject, department)
+        if not tmpl:
+            raise ValueError('No GP marksheet template')
+        return generate_compiled_gp_marksheet_workbook(
+            tmpl, department, semester_label, department_label,
+            subject_selection=subject_selection,
+            include_marks=True,
+        )
+
     schema = (template.schema if template else None) or {}
     aim_f, late_f = _compile_field_names(schema)
     max_marks = subject.max_marks_ipe if exam_type == 'IPE' else subject.max_marks_gp
@@ -1523,15 +1761,26 @@ def build_duty_marksheet_page_context(duty):
     }
 
 
+def user_can_edit_locked_marks(user):
+    """Semester Admin and Super Admin may edit marks even after Verify & Lock."""
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if getattr(user, 'is_superuser', False):
+        return True
+    role = getattr(user, 'role', '') or ''
+    return role in (
+        User.Role.SUPER_ADMIN,
+        User.Role.SEMESTER_ADMIN,
+        'SUPER_ADMIN',
+        'SEMESTER_ADMIN',
+    )
+
+
 def can_edit_duty_marks(user, duty):
     """Faculty and dept admin cannot edit when marks are locked; semester/super admin can."""
     if not duty.marks_locked:
         return True
-    if user.is_superuser or user.role == User.Role.SUPER_ADMIN:
-        return True
-    if user.role == User.Role.SEMESTER_ADMIN:
-        return True
-    return False
+    return user_can_edit_locked_marks(user)
 
 
 def verify_and_lock_duty_marks(duty, user):
@@ -1585,6 +1834,310 @@ def save_duty_marks(duty, post, students, user):
     now = timezone.now()
     FacultyDutyAssignment.objects.filter(pk=duty.pk).update(marks_saved_at=now)
     duty.marks_saved_at = now
+
+
+GP_READONLY_COL_TYPES = (
+    'sr_no', 'div', 'batch', 'enrollment_no', 'name', 'roll_no', 'total',
+    'gender_diversity', 'religion_diversity', 'case', 'group_id', 'final_marks',
+)
+
+
+def _gp_meta_display(val):
+    """Render meta cell — preserve 0 (Django default filter treats 0 as empty)."""
+    if val is None or val == '':
+        return ''
+    return str(val)
+
+
+def _editable_cols_for_gp_duty(gp_duty):
+    template = resolve_marksheet_template('GP', gp_duty.subject, gp_duty.department)
+    if not template:
+        return []
+    schema = template.schema or {}
+    return [
+        c for c in schema.get('columns', [])
+        if c['type'] not in GP_READONLY_COL_TYPES
+    ]
+
+
+def _gp_display_cols_for_duty(gp_duty):
+    template = resolve_marksheet_template('GP', gp_duty.subject, gp_duty.department)
+    if not template:
+        return []
+    schema = template.schema or {}
+    return [
+        c for c in schema.get('columns', [])
+        if c['type'] in ('group_id', 'gender_diversity', 'religion_diversity', 'case')
+    ]
+
+
+def _gp_duty_students_in_group_order(gp_duty):
+    """Students in formation split order — groups preserved, roll order within each group."""
+    from .group_formation import groups_for_split_ids
+
+    students = []
+    seen = set()
+    groups = groups_for_split_ids(
+        gp_duty.department, gp_duty.subject_selection, gp_duty.batch, gp_duty.group_ids,
+    )
+    for group in groups:
+        details = list(group.member_details.select_related('student').order_by('student__roll_no'))
+        if not details:
+            for m in group.members.order_by('roll_no'):
+                if m.pk not in seen:
+                    seen.add(m.pk)
+                    students.append(m)
+            continue
+        for detail in details:
+            stu = detail.student
+            if stu.pk in seen:
+                continue
+            seen.add(stu.pk)
+            students.append(stu)
+    return students, groups
+
+
+def _students_with_gp_meta(gp_duty):
+    """Students in the assigned split with group-level display codes."""
+    from .group_formation import build_batch_group_id_lookup
+    from .gp_utils import (
+        gp_case_code,
+        gp_gender_diversity_code,
+        gp_religion_diversity_code,
+        _read_group_id,
+    )
+
+    students, groups = _gp_duty_students_in_group_order(gp_duty)
+    _, _, group_to_gid = build_batch_group_id_lookup(
+        gp_duty.department, gp_duty.subject_selection, gp_duty.batch,
+    )
+    student_meta = {}
+    for group_idx, group in enumerate(groups, start=1):
+        gid = group_to_gid.get(group) or _read_group_id(group) or f'{gp_duty.batch}_{group_idx}'
+        meta = {
+            'group_id': gid,
+            'gender_diversity': gp_gender_diversity_code(group),
+            'religion_diversity': gp_religion_diversity_code(group),
+            'case': gp_case_code(group),
+        }
+        details = list(group.member_details.select_related('student').order_by('student__roll_no'))
+        if not details:
+            for m in group.members.order_by('roll_no'):
+                student_meta[m.pk] = meta
+        else:
+            for detail in details:
+                student_meta[detail.student_id] = meta
+    return students, student_meta, groups
+
+
+def _gp_group_blocks_for_duty(gp_duty, existing_marks, editable_cols, display_cols):
+    """Build group-wise row blocks matching GP attendance sheet layout."""
+    from .attendance_sheet import _gp_cell_str, _gp_display_name
+    from .gp_utils import (
+        _batch_palette,
+        gp_case_code,
+        gp_gender_diversity_code,
+        gp_religion_diversity_code,
+        _read_group_id,
+    )
+    from .group_formation import build_batch_group_id_lookup
+
+    _, groups = _gp_duty_students_in_group_order(gp_duty)
+    _, _, group_to_gid = build_batch_group_id_lookup(
+        gp_duty.department, gp_duty.subject_selection, gp_duty.batch,
+    )
+    light, dark = _batch_palette(gp_duty.batch, {gp_duty.batch})
+    blocks = []
+    sr_no = 1
+    total_students = 0
+
+    for group_idx, group in enumerate(groups, start=1):
+        details = list(group.member_details.select_related('student').order_by('student__roll_no'))
+        if not details:
+            for m in group.members.order_by('roll_no'):
+                details.append(type('Detail', (), {'student': m})())
+        if not details:
+            continue
+
+        gid = group_to_gid.get(group) or _read_group_id(group) or f'{gp_duty.batch}_{group_idx}'
+        group_meta = {
+            'group_id': gid,
+            'gender_diversity': _gp_meta_display(gp_gender_diversity_code(group)),
+            'religion_diversity': _gp_meta_display(gp_religion_diversity_code(group)),
+            'case': _gp_meta_display(gp_case_code(group)),
+        }
+        fill_color = dark if group_idx % 2 == 0 else light
+        rows = []
+
+        for mem_idx, detail in enumerate(details):
+            student = detail.student
+            mark = existing_marks.get(student.pk)
+            data = (mark.mark_data if mark else {}) or {}
+            display_cells = []
+            for col in display_cols:
+                key = col['key']
+                display_cells.append({'col': col, 'value': group_meta.get(key, '')})
+            cells = []
+            for col in editable_cols:
+                if col['type'] == 'remarks':
+                    val = (mark.remarks if mark else '') or data.get('remarks', '')
+                else:
+                    fname = col.get('field_name', col['key'])
+                    val = data.get(fname, '')
+                cells.append({'col': col, 'value': val})
+            mark_only_cols = [c for c in editable_cols if c['type'] == 'mark']
+            total_val, has_total = compute_mark_entry_total(mark_only_cols, data)
+            if not has_total:
+                total_val = ''
+            rows.append({
+                'student': student,
+                'student_pk': student.pk,
+                'mark': mark,
+                'display_cells': display_cells,
+                'cells': cells,
+                'total': total_val,
+                'sr_no': sr_no,
+                'roll_no': _gp_cell_str(student.roll_no),
+                'enrollment_no': _gp_cell_str(student.enrollment_no),
+                'display_name': _gp_display_name(student),
+                'is_last_in_group': mem_idx == len(details) - 1,
+            })
+            sr_no += 1
+            total_students += 1
+
+        blocks.append({
+            'group_id': gid,
+            'meta': group_meta,
+            'fill_color': fill_color,
+            'rows': rows,
+            'rowspan': len(rows),
+        })
+
+    return blocks, total_students
+
+
+def is_student_gp_duty_mark_complete(mark, editable_cols):
+    if mark is None:
+        return False
+    data = mark.mark_data or {}
+    required = [c for c in editable_cols if c['type'] == 'mark']
+    if not required:
+        return bool(data) or bool((mark.remarks or '').strip())
+    for col in required:
+        fname = col.get('field_name', col['key'])
+        if not str(data.get(fname, '')).strip():
+            return False
+    return True
+
+
+def get_gp_duty_marks_status(gp_duty):
+    students, _, _ = _students_with_gp_meta(gp_duty)
+    if not students:
+        return 'pending'
+    editable_cols = _editable_cols_for_gp_duty(gp_duty)
+    if not editable_cols:
+        return 'pending'
+    student_ids = [s.pk for s in students]
+    existing = {
+        m.student_id: m
+        for m in MarkEntry.objects.filter(gp_duty_assignment=gp_duty, student_id__in=student_ids)
+    }
+    for stu in students:
+        if not is_student_gp_duty_mark_complete(existing.get(stu.pk), editable_cols):
+            return 'pending'
+    return 'completed'
+
+
+def build_gp_duty_marksheet_page_context(gp_duty):
+    students, _, _ = _students_with_gp_meta(gp_duty)
+    template = resolve_marksheet_template('GP', gp_duty.subject, gp_duty.department)
+    editable_cols = _editable_cols_for_gp_duty(gp_duty)
+    display_cols = _gp_display_cols_for_duty(gp_duty)
+    existing = {
+        m.student_id: m
+        for m in MarkEntry.objects.filter(gp_duty_assignment=gp_duty, student__in=students)
+    }
+    group_blocks, total_students = _gp_group_blocks_for_duty(
+        gp_duty, existing, editable_cols, display_cols,
+    )
+
+    column_layout = build_mark_entry_layout(editable_cols)
+    schema_cols = (template.schema or {}).get('columns', []) if template else []
+    return {
+        'gp_duty': gp_duty,
+        'duty': gp_duty,
+        'is_gp_duty': True,
+        'group_blocks': group_blocks,
+        'total_students': total_students,
+        'student_rows': [row for block in group_blocks for row in block['rows']],
+        'display_cols': display_cols,
+        'editable_cols': editable_cols,
+        'column_layout': column_layout,
+        'has_mark_groups': any(b['kind'] == 'group' for b in column_layout),
+        'has_final_marks_col': any(c['type'] == 'final_marks' for c in schema_cols),
+        'template': template,
+        'marks_status': get_gp_duty_marks_status(gp_duty),
+        'batch_name': gp_duty.batch,
+    }
+
+
+def can_edit_gp_duty_marks(user, gp_duty):
+    """Faculty and dept admin cannot edit when locked; semester/super admin always can."""
+    if not gp_duty.marks_locked:
+        return True
+    return user_can_edit_locked_marks(user)
+
+
+def verify_and_lock_gp_duty_marks(gp_duty, user):
+    gp_duty.marks_locked = True
+    gp_duty.marks_locked_at = timezone.now()
+    gp_duty.marks_locked_by = user
+    gp_duty.save(update_fields=['marks_locked', 'marks_locked_at', 'marks_locked_by'])
+
+
+def save_gp_duty_marks(gp_duty, post, students, user):
+    template = resolve_marksheet_template('GP', gp_duty.subject, gp_duty.department)
+    schema = template.schema if template else {}
+    editable = [
+        c for c in schema.get('columns', [])
+        if c['type'] not in GP_READONLY_COL_TYPES
+    ]
+
+    for stu in students:
+        mark_data = {}
+        for col in editable:
+            fname = col.get('field_name', col['key'])
+            if col['type'] == 'remarks':
+                continue
+            val = post.get(f'{fname}_{stu.pk}', '').strip()
+            if val:
+                mark_data[fname] = val
+        remarks = post.get(f'remarks_{stu.pk}', '').strip()
+
+        mark_cols = [c for c in editable if c['type'] == 'mark']
+        numeric_sum, has_numeric = compute_mark_entry_total(mark_cols, mark_data)
+
+        if not mark_data and not remarks:
+            MarkEntry.objects.filter(student=stu, gp_duty_assignment=gp_duty).delete()
+            continue
+
+        if has_numeric:
+            mark_data['total'] = numeric_sum
+
+        MarkEntry.objects.update_or_create(
+            student=stu,
+            gp_duty_assignment=gp_duty,
+            defaults={
+                'mark_data': mark_data,
+                'marks_obtained': numeric_sum if has_numeric else 0,
+                'remarks': remarks,
+                'entered_by': user,
+            },
+        )
+
+    now = timezone.now()
+    GPDutyAssignment.objects.filter(pk=gp_duty.pk).update(marks_saved_at=now)
+    gp_duty.marks_saved_at = now
 
 
 def _short_program_title(label):

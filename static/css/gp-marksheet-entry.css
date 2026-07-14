@@ -1,0 +1,260 @@
+/* GP mark entry — matches official GP attendance / marksheet Excel styling */
+
+.gp-me-page {
+    font-family: 'Times New Roman', Times, serif;
+}
+
+.gp-me-scroll {
+    overflow: auto;
+    max-height: calc(100vh - 280px);
+    border: 1px solid #000;
+    border-radius: 0;
+    background: #fff;
+    padding: 0 10px 10px 0;
+}
+
+.gp-me-table {
+    table-layout: fixed;
+    width: max-content;
+    min-width: 100%;
+    margin: 0;
+    border-collapse: collapse;
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 10pt;
+    color: #000;
+    margin-right: 8px;
+}
+
+.gp-me-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #E2EFD9;
+    color: #000;
+    font-weight: 700;
+    font-size: 10pt;
+    text-align: center;
+    vertical-align: middle;
+    padding: 6px 4px;
+    border: 1px solid #000;
+    line-height: 1.2;
+    white-space: normal;
+}
+
+.gp-me-table thead tr.gp-me-subhead th {
+    top: 2.6rem;
+    background: #E2EFD9;
+    font-size: 9pt;
+    font-weight: 700;
+    padding: 4px 3px;
+}
+
+.gp-me-table thead th .me-th-op {
+    display: inline-block;
+    margin-left: 2px;
+    font-size: 8pt;
+    font-weight: 700;
+    color: #333;
+}
+
+.gp-me-table tbody td {
+    padding: 4px 5px;
+    vertical-align: middle;
+    border: 1px solid #000;
+    font-size: 10pt;
+    background: var(--gp-row-fill, #fff);
+}
+
+.gp-me-table tbody tr.gp-group-end td {
+    border-bottom: 2px solid #000;
+}
+
+.gp-me-table tbody tr:hover td {
+    filter: brightness(0.97);
+}
+
+/* Sticky identity columns */
+.gp-me-table .gp-me-sticky {
+    position: sticky;
+    z-index: 2;
+    background: var(--gp-row-fill, #fff);
+    box-shadow: 2px 0 3px rgba(0, 0, 0, 0.08);
+}
+
+.gp-me-table thead .gp-me-sticky {
+    z-index: 6;
+    background: #E2EFD9;
+    box-shadow: 2px 0 3px rgba(0, 0, 0, 0.12);
+}
+
+.gp-me-table thead tr.gp-me-subhead .gp-me-sticky {
+    background: #E2EFD9;
+}
+
+.gp-me-table .gp-me-sticky-1 { left: 0; min-width: 34px; width: 34px; }
+.gp-me-table .gp-me-sticky-2 { left: 34px; min-width: 36px; width: 36px; }
+.gp-me-table .gp-me-sticky-3 { left: 70px; min-width: 48px; width: 48px; }
+.gp-me-table .gp-me-sticky-4 { left: 118px; min-width: 44px; width: 44px; }
+.gp-me-table .gp-me-sticky-5 { left: 162px; min-width: 108px; width: 108px; }
+
+.gp-me-table .gp-me-sticky-final {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background: #EAF1DD;
+    box-shadow: -2px 0 3px rgba(0, 0, 0, 0.08);
+    font-weight: 700;
+    text-align: center;
+    min-width: 58px;
+    width: 58px;
+}
+
+.gp-me-table .gp-me-sticky-total {
+    position: sticky;
+    right: 58px;
+    z-index: 2;
+    background: #EAF1DD;
+    box-shadow: -2px 0 3px rgba(0, 0, 0, 0.06);
+    font-weight: 700;
+    text-align: center;
+    min-width: 50px;
+    width: 50px;
+}
+
+.gp-me-table thead .gp-me-sticky-final,
+.gp-me-table thead .gp-me-sticky-total {
+    z-index: 6;
+    background: #E2EFD9;
+}
+
+.gp-me-table:not(.has-final-col) .gp-me-sticky-total {
+    right: 0;
+}
+
+/* GP attendance-style fills */
+.gp-me-fill-div {
+    background: #FFF2CC !important;
+    font-weight: 700;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.gp-me-fill-group {
+    background: #DDEBF7 !important;
+    font-weight: 700;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.gp-me-fill-meta {
+    background: #DDEBF7 !important;
+    font-weight: 700;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.gp-me-fill-mark {
+    background: #F2DBDB !important;
+}
+
+.gp-me-fill-final {
+    background: #EAF1DD !important;
+}
+
+.gp-me-fill-total {
+    background: #EAF1DD !important;
+    font-weight: 700;
+}
+
+.gp-me-table .gp-me-roll {
+    text-align: center;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+}
+
+.gp-me-table .gp-me-name {
+    font-weight: 400;
+    text-transform: uppercase;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gp-me-table .gp-me-enroll {
+    font-size: 10pt;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gp-me-table .gp-me-sr {
+    text-align: center;
+    font-size: 10pt;
+}
+
+.gp-me-table .gp-me-total {
+    font-size: 10pt;
+    font-weight: 700;
+    text-align: center;
+    min-height: 1.4rem;
+}
+
+.gp-me-table .gp-me-input {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 2px 1px;
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 10pt;
+    font-weight: 400;
+    text-align: center;
+    color: #000;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: inset 0 0 0 1px #888;
+}
+
+.gp-me-table .gp-me-input:focus {
+    outline: none;
+    box-shadow: inset 0 0 0 1px #000;
+    background: #fff;
+}
+
+.gp-me-table .gp-me-input::placeholder {
+    color: #888;
+    font-size: 8pt;
+}
+
+.gp-me-actions .gp-me-count {
+    margin-left: auto;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.gp-me-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    margin-bottom: 0.75rem;
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 9pt;
+    color: #333;
+}
+
+.gp-me-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.gp-me-legend i {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 1px solid #000;
+    border-radius: 0;
+}

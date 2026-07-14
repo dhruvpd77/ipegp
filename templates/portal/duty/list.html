@@ -88,22 +88,32 @@
                     <div class="mb-3">
                         <label class="form-label">Subject</label>
                         {{ duty_form.subject }}
+                        {% if duty_form.subject.errors %}<div class="text-danger small">{{ duty_form.subject.errors }}</div>{% endif %}
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Faculty</label>
-                        {{ duty_form.faculty }}
+                        <label class="form-label">Internal Faculty</label>
+                        {{ duty_form.internal_faculty }}
+                        {% if duty_form.internal_faculty.errors %}<div class="text-danger small">{{ duty_form.internal_faculty.errors }}</div>{% endif %}
+                    </div>
+                    <div class="mb-3" id="ipeInternalOtherWrap" style="display:none;">
+                        <label class="form-label">Other Internal Faculty Name</label>
+                        {{ duty_form.internal_faculty_other }}
+                        {% if duty_form.internal_faculty_other.errors %}<div class="text-danger small">{{ duty_form.internal_faculty_other.errors }}</div>{% endif %}
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Role</label>
-                        {{ duty_form.duty_role }}
+                        <label class="form-label">External Faculty Name</label>
+                        {{ duty_form.external_faculty_name }}
+                        {% if duty_form.external_faculty_name.errors %}<div class="text-danger small">{{ duty_form.external_faculty_name.errors }}</div>{% endif %}
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Batch</label>
                         {{ duty_form.batch }}
+                        {% if duty_form.batch.errors %}<div class="text-danger small">{{ duty_form.batch.errors }}</div>{% endif %}
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Duty Date</label>
                         {{ duty_form.duty_date }}
+                        {% if duty_form.duty_date.errors %}<div class="text-danger small">{{ duty_form.duty_date.errors }}</div>{% endif %}
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Time Slot</label>
@@ -185,4 +195,39 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const internalSelect = document.getElementById('id_ipe_internal_faculty');
+    const otherWrap = document.getElementById('ipeInternalOtherWrap');
+    const otherInput = document.getElementById('id_ipe_internal_other');
+    const externalInput = document.getElementById('id_external_faculty_name');
+
+    function toggleOther() {
+        if (!internalSelect || !otherWrap) return;
+        const show = internalSelect.value === 'OTHER';
+        otherWrap.style.display = show ? '' : 'none';
+        if (!show && otherInput) otherInput.value = '';
+    }
+
+    function forceUpper(input) {
+        if (!input) return;
+        input.addEventListener('input', function () {
+            const start = this.selectionStart;
+            const end = this.selectionEnd;
+            this.value = this.value.toUpperCase();
+            this.setSelectionRange(start, end);
+        });
+    }
+
+    if (internalSelect) {
+        internalSelect.addEventListener('change', toggleOther);
+        toggleOther();
+    }
+    forceUpper(otherInput);
+    forceUpper(externalInput);
+})();
+</script>
 {% endblock %}

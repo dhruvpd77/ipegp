@@ -68,6 +68,12 @@ urlpatterns = [
     path('marksheets/', views.marksheet_templates, name='marksheet_templates'),
     path('marksheets/template/<int:pk>/delete/', views.marksheet_template_delete, name='marksheet_template_delete'),
     path('marksheets/final-download/', views.final_marksheet_download, name='final_marksheet_download'),
+    path('marksheets/filled-download/', views.filled_marksheet_download, name='filled_marksheet_download'),
+
+    # IPE Invitation Letters
+    path('invitation-letter/', views.ipe_invitation_letter, name='ipe_invitation_letter'),
+    path('invitation-letter/faculty/<int:pk>/pdf/', views.ipe_invitation_pdf, name='ipe_invitation_pdf'),
+    path('invitation-letter/faculty/<int:pk>/thanks/', views.ipe_thanks_pdf, name='ipe_thanks_pdf'),
 
     # Faculty Duty Assignment
     path('duty/', views.faculty_duty_list, name='faculty_duty_list'),
@@ -101,11 +107,13 @@ urlpatterns = [
     # Faculty mark entry
     path('marks/', views.mark_entry_list, name='mark_entry_list'),
     path('marks/duty/<int:duty_pk>/', views.mark_entry_duty, name='mark_entry_duty'),
+    path('marks/gp/<int:duty_pk>/', views.mark_entry_gp_duty, name='mark_entry_gp_duty'),
     path('marks/<int:session_pk>/', views.mark_entry, name='mark_entry'),
 
     # Admin marks entry (view faculty marksheets) — not under /admin/ (Django admin conflict)
     path('marks-entry/', views.admin_marks_entry, name='admin_marks_entry'),
     path('marks-entry/duty/<int:duty_pk>/', views.admin_marks_entry_view, name='admin_marks_entry_view'),
+    path('marks-entry/gp/<int:duty_pk>/', views.admin_marks_entry_gp_view, name='admin_marks_entry_gp_view'),
 
     # Exams
     path('exams/', views.exam_session_list, name='exam_session_list'),

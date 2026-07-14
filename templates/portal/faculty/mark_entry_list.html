@@ -18,7 +18,9 @@
                     <p class="fac-hero-sub">{{ faculty.name }} · {{ faculty.department.name }}</p>
                 </div>
             </div>
-            <div class="fac-hero-tag">{{ duties|length }} Assignment{{ duties|length|pluralize }}</div>
+            {% with ipe_count=duties|length gp_count=gp_duties|length %}
+            <div class="fac-hero-tag">{{ ipe_count|add:gp_count }} Assignment{{ ipe_count|add:gp_count|pluralize }}</div>
+            {% endwith %}
         </div>
     </section>
 
@@ -31,7 +33,7 @@
 
     <div class="fac-section-title">Assigned Duties</div>
 
-    {% if duties %}
+    {% if duties or gp_duties %}
     <div class="fac-duty-grid">
         {% for d in duties %}
         <div class="fac-duty-card">
@@ -71,7 +73,6 @@
                         <div class="value">{{ d.department.name }}</div>
                     </div>
                 </div>
-                {% if d.duty_role == 'INTERNAL' %}
                 <div class="fac-duty-action">
                     <a href="{% url 'portal:mark_entry_duty' d.pk %}" class="btn btn-primary-custom">
                         {% if d.marks_locked %}
@@ -86,7 +87,57 @@
                     <span class="fac-duty-lock-badge text-muted"><i class="bi bi-clock"></i> Saved {{ d.marks_saved_at|date:"d M Y" }}</span>
                     {% endif %}
                 </div>
-                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        {% for g in gp_duties %}
+        <div class="fac-duty-card">
+            <div class="fac-duty-head">
+                <h2 class="fac-duty-subject">{{ g.subject.name }}</h2>
+                <span class="fac-duty-type">GP</span>
+            </div>
+            <div class="fac-duty-body">
+                <div class="fac-duty-date">
+                    <i class="bi bi-calendar3"></i> {{ g.duty_date|date:"l, d M Y" }}
+                </div>
+                <div class="fac-duty-meta">
+                    <div class="fac-duty-field">
+                        <div class="label">Split / Groups</div>
+                        <div class="value"><code class="small">{{ g.split_display }}</code></div>
+                    </div>
+                    <div class="fac-duty-field">
+                        <div class="label">Role</div>
+                        <div class="value">
+                            {% if faculty.pk == g.internal_faculty_id %}
+                            <span class="fac-role-badge internal">Internal</span>
+                            {% else %}
+                            <span class="fac-role-badge external">External</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="fac-duty-field">
+                        <div class="label">Room</div>
+                        <div class="value">{{ g.room_no|default:"—" }}</div>
+                    </div>
+                    <div class="fac-duty-field">
+                        <div class="label">Department</div>
+                        <div class="value">{{ g.department.name }}</div>
+                    </div>
+                </div>
+                <div class="fac-duty-action">
+                    <a href="{% url 'portal:mark_entry_gp_duty' g.pk %}" class="btn btn-primary-custom">
+                        {% if g.marks_locked %}
+                        <i class="bi bi-eye"></i> View Marks
+                        {% else %}
+                        <i class="bi bi-pencil-square"></i> Enter Marks
+                        {% endif %}
+                    </a>
+                    {% if g.marks_locked %}
+                    <span class="fac-duty-lock-badge"><i class="bi bi-lock-fill"></i> Locked {{ g.marks_locked_at|date:"d M Y" }}</span>
+                    {% elif g.marks_saved_at %}
+                    <span class="fac-duty-lock-badge text-muted"><i class="bi bi-clock"></i> Saved {{ g.marks_saved_at|date:"d M Y" }}</span>
+                    {% endif %}
+                </div>
             </div>
         </div>
         {% endfor %}

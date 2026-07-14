@@ -96,16 +96,16 @@
 
             <div class="fac-doc-actions">
 
-                <a href="{% url 'portal:faculty_syllabus_view' item.pk %}" class="btn btn-primary-custom flex-grow-1">
-
+                <a href="{% url 'portal:faculty_syllabus_view' item.pk %}"
+                   target="_blank" rel="noopener"
+                   class="btn btn-primary-custom flex-grow-1"
+                   title="Open in view tab">
                     <i class="bi bi-eye"></i> View
-
                 </a>
-
-                <a href="{% url 'portal:faculty_syllabus_file' item.pk %}?download=1" class="btn btn-outline-secondary">
-
+                <a href="{% url 'portal:faculty_syllabus_file' item.pk %}?download=1"
+                   class="btn btn-outline-secondary"
+                   title="Download file">
                     <i class="bi bi-download"></i>
-
                 </a>
 
             </div>

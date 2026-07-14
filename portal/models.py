@@ -597,11 +597,25 @@ class GPDutyAssignment(models.Model):
     )
     internal_faculty_other = models.CharField(max_length=200, blank=True)
     external_faculty_name = models.CharField(max_length=200, blank=True)
+    external_faculty = models.ForeignKey(
+        Faculty, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='gp_external_duties',
+    )
     duty_date = models.DateField()
     room_no = models.CharField(max_length=50, blank=True)
     assigned_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='gp_duties_assigned',
+    )
+    marks_locked = models.BooleanField(
+        default=False,
+        help_text='When set, faculty cannot edit marks for this GP split duty.',
+    )
+    marks_saved_at = models.DateTimeField(null=True, blank=True)
+    marks_locked_at = models.DateTimeField(null=True, blank=True)
+    marks_locked_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='gp_duty_marks_locked',
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -651,6 +665,10 @@ class MarkEntry(models.Model):
         FacultyDutyAssignment, on_delete=models.CASCADE, null=True, blank=True,
         related_name='mark_entries',
     )
+    gp_duty_assignment = models.ForeignKey(
+        'GPDutyAssignment', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='mark_entries',
+    )
     marks_obtained = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     mark_data = models.JSONField(default=dict, blank=True)
     remarks = models.CharField(max_length=255, blank=True)
@@ -669,6 +687,11 @@ class MarkEntry(models.Model):
                 condition=models.Q(duty_assignment__isnull=False),
                 name='unique_mark_per_duty',
             ),
+            models.UniqueConstraint(
+                fields=['student', 'gp_duty_assignment'],
+                condition=models.Q(gp_duty_assignment__isnull=False),
+                name='unique_mark_per_gp_duty',
+            ),
         ]
 
     def __str__(self):
@@ -683,3 +706,97 @@ class GeneratedCredential(models.Model):
 
     def __str__(self):
         return f"{self.user.username}"
+
+
+class IPEInvitationBatch(models.Model):
+    """Common letter fields for a set of IPE external examiner invitation letters."""
+    subject = models.ForeignKey(
+        Subject, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='ipe_invitation_batches',
+    )
+    department = models.ForeignKey(
+        Department, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='ipe_invitation_batches',
+    )
+    letter_date = models.CharField(max_length=100, help_text='e.g. 17 Feb. 2025')
+    subject_line = models.CharField(
+        max_length=400,
+        default='Appointment as an External Examiner for conducting Internal Practical Examination of B.E. Semester-III',
+    )
+    subject_name = models.CharField(max_length=250)
+    practical_date = models.CharField(max_length=100, help_text='e.g. 20 February 2025')
+    branch = models.CharField(max_length=200, default='CE/IT/CSD/AIML/AIDS/RAI/CSE/CST/CSIT/CEA')
+    exam_time = models.CharField(max_length=100, default='9:00 am onwards')
+    excel_file = models.FileField(upload_to='invitation_excels/', blank=True)
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ipe_invitation_batches_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        label = self.subject.name if self.subject_id else self.subject_name
+        return f'IPE Invite — {label} ({self.practical_date})'
+
+
+class IPEInvitationSignature(models.Model):
+    """Admin-managed signature for invitation letters (one per subject)."""
+    subject = models.OneToOneField(
+        Subject, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='ipe_invitation_signature',
+    )
+    signature = models.ImageField(upload_to='invitation_signatures/', blank=True)
+    advisor_title = models.CharField(max_length=100, default='Advisor')
+    advisor_name = models.CharField(max_length=150, default='(Mr Rohit Patel)')
+    updated_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ipe_invitation_signatures_updated',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'IPE Invitation Signature'
+        verbose_name_plural = 'IPE Invitation Signatures'
+
+    def __str__(self):
+        subj = self.subject.name if self.subject_id else 'Global'
+        return f'Signature — {subj} — {self.advisor_name}'
+
+    @classmethod
+    def get_for_subject(cls, subject):
+        if not subject:
+            return None
+        obj, _ = cls.objects.get_or_create(subject=subject)
+        return obj
+
+
+class IPEInvitationFaculty(models.Model):
+    """One external examiner row from the uploaded Excel."""
+    batch = models.ForeignKey(IPEInvitationBatch, on_delete=models.CASCADE, related_name='faculties')
+    name = models.CharField(max_length=200)
+    designation = models.CharField(max_length=200, blank=True)
+    college_name = models.CharField(max_length=300, blank=True)
+    city_state = models.CharField(max_length=200, blank=True)
+    email = models.EmailField(blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['sort_order', 'name']
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def invite_filename(self):
+        safe = ''.join(ch if ch.isalnum() or ch in (' ', '_', '-') else '' for ch in (self.name or 'EXTERNAL'))
+        safe = ' '.join(safe.split()).upper() or 'EXTERNAL'
+        return f'{safe}_INVITE LETTER.pdf'
+
+    @property
+    def thanks_filename(self):
+        safe = ''.join(ch if ch.isalnum() or ch in (' ', '_', '-') else '' for ch in (self.name or 'EXTERNAL'))
+        safe = ' '.join(safe.split()).upper() or 'EXTERNAL'
+        return f'{safe}_THANK LETTER.pdf'

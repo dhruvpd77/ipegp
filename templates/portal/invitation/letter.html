@@ -1,0 +1,358 @@
+{% extends 'portal/base.html' %}
+{% block title %}IPE Invitation Letter{% endblock %}
+{% block content %}
+
+{% include 'portal/includes/section_header.html' with icon='envelope-paper' title='IPE Invitation Letter' subtitle='Select a subject, then upload Excel and download invitation letter PDFs' %}
+
+<div class="filter-bar mb-4 flex-wrap gap-3">
+    {% if show_dept_filter %}
+    <form method="get" class="d-flex align-items-center gap-2">
+        <label>Department:</label>
+        <select name="department" class="form-select form-select-sm" style="width:auto;min-width:180px;" onchange="this.form.submit()">
+            <option value="all" {% if not department %}selected{% endif %}>All Departments</option>
+            {% for d in departments %}
+            <option value="{{ d.pk }}" {% if department and department.pk == d.pk %}selected{% endif %}>{{ d.name }}{% if is_super %} ({{ d.semester.name }}){% endif %}</option>
+            {% endfor %}
+        </select>
+        {% if selected_subject %}<input type="hidden" name="subject" value="{{ selected_subject.pk }}">{% endif %}
+    </form>
+    {% endif %}
+    <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
+        {% if department %}<input type="hidden" name="department" value="{{ department.pk }}">{% endif %}
+        <label class="fw-semibold small mb-0">Subject:</label>
+        <select name="subject" class="form-select form-select-sm" style="min-width:260px;" onchange="this.form.submit()">
+            <option value="">— Select subject first —</option>
+            {% for s in subjects %}
+            <option value="{{ s.pk }}" {% if selected_subject and selected_subject.pk == s.pk %}selected{% endif %}>
+                {{ s.name }}{% if s.code %} ({{ s.code }}){% endif %}
+            </option>
+            {% empty %}
+            <option value="" disabled>No subjects available</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+{% if not selected_subject %}
+<div class="portal-card">
+    <div class="portal-card-body text-center text-muted py-5">
+        <i class="bi bi-journal-bookmark display-6 d-block mb-3 opacity-50"></i>
+        <p class="mb-1 fw-semibold">Select a subject first</p>
+        <p class="small mb-0">Signature, Excel upload, and invitation letters are separate for each subject.</p>
+    </div>
+</div>
+{% else %}
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="portal-card form-panel mb-4">
+            <div class="portal-card-header"><i class="bi bi-pen"></i> Advisor Signature — {{ selected_subject.name }}</div>
+            <div class="portal-card-body">
+                <p class="small text-muted mb-3">
+                    Signature for this subject only. Upload an image or draw on the blank pad, then save.
+                </p>
+                {% if signature.signature %}
+                <div class="mb-3 text-center p-2 border rounded bg-white">
+                    <div class="small text-muted mb-1">Current signature</div>
+                    <img src="{{ signature.signature.url }}" alt="Advisor signature" style="max-height:70px; max-width:100%;">
+                </div>
+                {% else %}
+                <div class="alert alert-warning py-2 small mb-3">No signature for this subject yet — upload or draw one.</div>
+                {% endif %}
+
+                <form method="post" enctype="multipart/form-data" id="signatureForm">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="save_signature">
+                    <input type="hidden" name="subject_id" value="{{ selected_subject.pk }}">
+                    <input type="hidden" name="signature_data" id="signatureData" value="">
+                    {% if department %}<input type="hidden" name="department_id" value="{{ department.pk }}">{% endif %}
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small">Title</label>
+                            <input type="text" name="advisor_title" class="form-control form-control-sm"
+                                   value="{{ signature.advisor_title|default:'Advisor' }}">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small">Name</label>
+                            <input type="text" name="advisor_name" class="form-control form-control-sm"
+                                   value="{{ signature.advisor_name|default:'(Mr Rohit Patel)' }}">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Upload signature image</label>
+                        <input type="file" name="signature_file" class="form-control form-control-sm"
+                               accept="image/png,image/jpeg,image/jpg,image/webp">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-1">Or draw signature</label>
+                        <div class="border rounded bg-white overflow-hidden">
+                            <canvas id="sigCanvas" width="420" height="140"
+                                    style="width:100%; height:140px; touch-action:none; cursor:crosshair; display:block;"></canvas>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="sigClearBtn">
+                                <i class="bi bi-eraser"></i> Clear pad
+                            </button>
+                            <button type="submit" class="btn btn-sm btn-accent" id="sigSaveBtn">
+                                <i class="bi bi-check2"></i> Save signature
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                {% if signature.signature %}
+                <form method="post" class="mt-2" onsubmit="return confirm('Remove the saved signature for this subject?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="clear_signature">
+                    <input type="hidden" name="subject_id" value="{{ selected_subject.pk }}">
+                    {% if department %}<input type="hidden" name="department_id" value="{{ department.pk }}">{% endif %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-trash"></i> Remove saved signature
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="portal-card form-panel mb-4">
+            <div class="portal-card-header"><i class="bi bi-upload"></i> Create Letters — {{ selected_subject.name }}</div>
+            <div class="portal-card-body">
+                <p class="small text-muted mb-3">
+                    Upload an Excel with <strong>Name, Designation, College Name, City/State, Email</strong>.
+                    Letter fields below apply to every examiner for <strong>{{ selected_subject.name }}</strong>.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label">Subject Name (on letter)</label>
+                    <input type="text" class="form-control" value="{{ selected_subject.name }}" readonly>
+                </div>
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="create">
+                    <input type="hidden" name="subject_id" value="{{ selected_subject.pk }}">
+                    {% if department %}<input type="hidden" name="department_id" value="{{ department.pk }}">{% endif %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.excel_file.id_for_label }}">{{ form.excel_file.label }}</label>
+                        {{ form.excel_file }}
+                        {% if form.excel_file.help_text %}<div class="form-text">{{ form.excel_file.help_text }}</div>{% endif %}
+                        {% for e in form.excel_file.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.letter_date.id_for_label }}">{{ form.letter_date.label }}</label>
+                        {{ form.letter_date }}
+                        {% for e in form.letter_date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.subject_line.id_for_label }}">{{ form.subject_line.label }}</label>
+                        {{ form.subject_line }}
+                        {% for e in form.subject_line.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.practical_date.id_for_label }}">{{ form.practical_date.label }}</label>
+                        {{ form.practical_date }}
+                        {% for e in form.practical_date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.branch.id_for_label }}">{{ form.branch.label }}</label>
+                        {{ form.branch }}
+                        {% for e in form.branch.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.exam_time.id_for_label }}">{{ form.exam_time.label }}</label>
+                        {{ form.exam_time }}
+                        {% for e in form.exam_time.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <button type="submit" class="btn btn-accent w-100">
+                        <i class="bi bi-envelope-paper"></i> Generate Letters
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        {% if batches %}
+        <div class="portal-card form-panel">
+            <div class="portal-card-header"><i class="bi bi-clock-history"></i> Previous Batches — {{ selected_subject.name }}</div>
+            <div class="portal-card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for b in batches %}
+                    <li class="list-group-item d-flex justify-content-between align-items-start {% if selected_batch and selected_batch.pk == b.pk %}bg-light{% endif %}">
+                        <a href="?subject={{ selected_subject.pk }}{% if department %}&department={{ department.pk }}{% endif %}&batch={{ b.pk }}" class="text-decoration-none flex-grow-1 pe-2">
+                            <div class="fw-semibold small">{{ b.subject_name }}</div>
+                            <div class="text-muted" style="font-size:0.8rem;">
+                                {{ b.practical_date }} · {{ b.faculties.count }} examiner(s)
+                            </div>
+                        </a>
+                        <form method="post" onsubmit="return confirm('Delete this batch and all its letters?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="form_type" value="delete_batch">
+                            <input type="hidden" name="subject_id" value="{{ selected_subject.pk }}">
+                            <input type="hidden" name="batch_id" value="{{ b.pk }}">
+                            {% if department %}<input type="hidden" name="department_id" value="{{ department.pk }}">{% endif %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-7">
+        {% if selected_batch %}
+        <div class="portal-card">
+            <div class="portal-card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span><i class="bi bi-people"></i> External Examiners — Download Letters</span>
+                <span class="badge bg-secondary">{{ selected_batch.faculties.count }} letter(s)</span>
+            </div>
+            <div class="portal-card-body">
+                <div class="small text-muted mb-3">
+                    <div><strong>Subject:</strong> {{ selected_batch.subject_name }}</div>
+                    <div><strong>Date:</strong> {{ selected_batch.letter_date }}</div>
+                    <div><strong>Sub:</strong> {{ selected_batch.subject_line }}</div>
+                    <div><strong>Date of Practical:</strong> {{ selected_batch.practical_date }}</div>
+                    <div><strong>Branch:</strong> {{ selected_batch.branch }}</div>
+                    <div><strong>Exam Time:</strong> {{ selected_batch.exam_time }}</div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>Designation</th>
+                                <th>College</th>
+                                <th>City/State</th>
+                                <th>Email</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for f in selected_batch.faculties.all %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td class="fw-semibold">{{ f.name }}</td>
+                                <td>{{ f.designation|default:"—" }}</td>
+                                <td>{{ f.college_name|default:"—" }}</td>
+                                <td>{{ f.city_state|default:"—" }}</td>
+                                <td class="small">{{ f.email|default:"—" }}</td>
+                                <td class="text-nowrap">
+                                    <a href="{% url 'portal:ipe_invitation_pdf' f.pk %}" class="btn btn-sm btn-primary-custom" title="Download Invitation Letter">
+                                        <i class="bi bi-download"></i> Invite
+                                    </a>
+                                    <a href="{% url 'portal:ipe_thanks_pdf' f.pk %}" class="btn btn-sm btn-outline-success" title="Download Thanks Letter">
+                                        <i class="bi bi-envelope-heart"></i> Thanks
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-muted text-center py-4">No faculty in this batch.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="small text-muted mt-3 mb-0">
+                    Invite PDF: <code>NAME_INVITE LETTER.pdf</code> ·
+                    Thanks PDF: <code>NAME_THANK LETTER.pdf</code>
+                    (date on thanks letter = Date of Practical; signature from Advisor Signature above).
+                </p>
+            </div>
+        </div>
+        {% else %}
+        <div class="portal-card">
+            <div class="portal-card-body text-center text-muted py-5">
+                <i class="bi bi-envelope-paper display-6 d-block mb-3 opacity-50"></i>
+                Upload an Excel for <strong>{{ selected_subject.name }}</strong> to generate invitation letters.
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+(function () {
+    const canvas = document.getElementById('sigCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const form = document.getElementById('signatureForm');
+    const dataInput = document.getElementById('signatureData');
+    const clearBtn = document.getElementById('sigClearBtn');
+    let drawing = false;
+    let dirty = false;
+    let lastX = 0, lastY = 0;
+
+    function resizeCanvas() {
+        const ratio = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        const w = Math.max(280, Math.floor(rect.width));
+        const h = 140;
+        canvas.width = w * ratio;
+        canvas.height = h * ratio;
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#1a1a2e';
+        dirty = false;
+    }
+
+    function pos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const src = e.touches ? e.touches[0] : e;
+        return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+    }
+
+    function start(e) {
+        drawing = true;
+        const p = pos(e);
+        lastX = p.x; lastY = p.y;
+        e.preventDefault();
+    }
+    function move(e) {
+        if (!drawing) return;
+        const p = pos(e);
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        lastX = p.x; lastY = p.y;
+        dirty = true;
+        e.preventDefault();
+    }
+    function end() { drawing = false; }
+
+    canvas.addEventListener('mousedown', start);
+    canvas.addEventListener('mousemove', move);
+    canvas.addEventListener('mouseup', end);
+    canvas.addEventListener('mouseleave', end);
+    canvas.addEventListener('touchstart', start, { passive: false });
+    canvas.addEventListener('touchmove', move, { passive: false });
+    canvas.addEventListener('touchend', end);
+
+    clearBtn?.addEventListener('click', function () {
+        resizeCanvas();
+        dataInput.value = '';
+    });
+
+    form?.addEventListener('submit', function () {
+        const fileInput = form.querySelector('input[name="signature_file"]');
+        const hasFile = fileInput && fileInput.files && fileInput.files.length;
+        if (!hasFile && dirty) {
+            dataInput.value = canvas.toDataURL('image/png');
+        } else {
+            dataInput.value = '';
+        }
+    });
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+})();
+</script>
+
+{% endif %}
+
+{% endblock %}

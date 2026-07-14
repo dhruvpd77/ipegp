@@ -1,0 +1,228 @@
+{% extends 'portal/base.html' %}
+{% load static %}
+{% block title %}{% if read_only %}View GP Marksheet{% else %}GP Mark Entry{% endif %} — {{ gp_duty.subject.name }} {{ gp_duty.split_display }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/marksheet-entry.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/gp-marksheet-entry.css' %}?v=2">
+{% endblock %}
+{% block content %}
+<div class="me-page gp-me-page">
+
+{% include 'portal/includes/section_header.html' with icon=read_only|yesno:'eye,pencil-square' title=gp_duty.subject.name subtitle=gp_duty.split_display %}
+
+<div class="me-meta">
+    <span class="badge badge-gp">GP</span>
+    <span class="me-pill"><i class="bi bi-calendar3"></i> {{ gp_duty.duty_date|date:"d M Y" }}</span>
+    <span class="me-pill"><i class="bi bi-building"></i> {{ gp_duty.department.name }}</span>
+    <span class="me-pill"><i class="bi bi-door-open"></i> {{ gp_duty.room_no|default:"—" }}</span>
+    {% if marks_status == 'completed' %}
+    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Completed</span>
+    {% else %}
+    <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Pending</span>
+    {% endif %}
+    {% if gp_duty.marks_locked %}
+    <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Verified &amp; Locked</span>
+    {% endif %}
+    {% if gp_duty.marks_saved_at %}
+    <span class="me-pill" title="Last saved"><i class="bi bi-clock"></i> Saved {{ gp_duty.marks_saved_at|date:"d M Y, h:i A" }}</span>
+    {% endif %}
+    {% if read_only %}
+    <span class="text-muted">{% if gp_duty.marks_locked %}Marks are locked — view only.{% else %}Read-only view.{% endif %}</span>
+    {% else %}
+    <span class="text-muted">Enter marks per GP template · <strong>AB</strong> for absent · Total = sum of program marks</span>
+    {% endif %}
+</div>
+
+{% if not template %}
+<div class="alert alert-warning">No GP marksheet template uploaded for this subject. Contact admin.</div>
+{% else %}
+
+<div class="gp-me-legend">
+    <span><i style="background:#FFF2CC"></i> Div / Batch</span>
+    <span><i style="background:#DDEBF7"></i> Group ID &amp; Meta</span>
+    <span><i style="background:#F2DBDB"></i> Program Marks</span>
+    <span><i style="background:#EAF1DD"></i> Total / Final</span>
+    <span><i style="background:#D6EAF8;border-color:#000"></i> Group shade A</span>
+    <span><i style="background:#AED6F1;border-color:#000"></i> Group shade B</span>
+</div>
+
+<div class="portal-card">
+    <div class="portal-card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-table"></i> GP Marksheet — {{ gp_duty.split_display }}</span>
+        <span class="small opacity-75">{{ total_students }} students · {{ group_blocks|length }} group{{ group_blocks|length|pluralize }}</span>
+    </div>
+    <div class="portal-card-body p-0">
+        {% if read_only %}<div>{% else %}<form method="post">{% csrf_token %}{% endif %}
+            <div class="gp-me-scroll">
+                <table class="gp-me-table{% if has_final_marks_col %} has-final-col{% endif %}">
+                    <colgroup>
+                        <col style="width:34px">
+                        <col style="width:36px">
+                        <col style="width:48px">
+                        <col style="width:44px">
+                        <col style="width:108px">
+                        <col style="width:160px">
+                        {% for col in display_cols %}
+                        {% if col.key != 'group_id' %}
+                        <col style="width:52px">
+                        {% endif %}
+                        {% endfor %}
+                        {% for block in column_layout %}
+                        {% if block.kind == 'single' %}
+                        <col style="width:62px">
+                        {% else %}
+                        {% for c in block.cols %}
+                        <col style="width:66px">
+                        {% endfor %}
+                        {% endif %}
+                        {% endfor %}
+                        <col style="width:50px">
+                        {% if has_final_marks_col %}<col style="width:58px">{% endif %}
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th rowspan="2" class="gp-me-sticky gp-me-sticky-1">Sr<br>No.</th>
+                            <th rowspan="2" class="gp-me-sticky gp-me-sticky-2">Div</th>
+                            <th rowspan="2" class="gp-me-sticky gp-me-sticky-3">Group<br>ID</th>
+                            <th rowspan="2" class="gp-me-sticky gp-me-sticky-4">Roll<br>No.</th>
+                            <th rowspan="2" class="gp-me-sticky gp-me-sticky-5">Enrollment<br>No</th>
+                            <th rowspan="2" class="text-start">Name of Student</th>
+                            {% for col in display_cols %}
+                            {% if col.key == 'gender_diversity' %}
+                            <th rowspan="2">Gender<br>Div</th>
+                            {% elif col.key == 'religion_diversity' %}
+                            <th rowspan="2">Religion<br>Div</th>
+                            {% elif col.key == 'case' %}
+                            <th rowspan="2">Case<br>Study</th>
+                            {% endif %}
+                            {% endfor %}
+                            {% for block in column_layout %}
+                            {% if block.kind == 'single' %}
+                            {% if block.col.type == 'remarks' %}
+                            <th rowspan="2">Remarks</th>
+                            {% else %}
+                            <th rowspan="2">{{ block.header.short }}</th>
+                            {% endif %}
+                            {% else %}
+                            <th colspan="{{ block.cols|length }}">{{ block.title }}</th>
+                            {% endif %}
+                            {% endfor %}
+                            <th rowspan="2" class="gp-me-sticky-total">Total</th>
+                            {% if has_final_marks_col %}
+                            <th rowspan="2" class="gp-me-sticky-final">Final<br>Marks</th>
+                            {% endif %}
+                        </tr>
+                        {% if has_mark_groups %}
+                        <tr class="gp-me-subhead">
+                            {% for block in column_layout %}
+                            {% if block.kind == 'group' %}
+                            {% for h in block.headers %}
+                            <th>{{ h.short }}</th>
+                            {% endfor %}
+                            {% endif %}
+                            {% endfor %}
+                        </tr>
+                        {% endif %}
+                    </thead>
+                    <tbody>
+                    {% for block in group_blocks %}
+                        {% for row in block.rows %}
+                        <tr data-student="{{ row.student_pk }}" class="{% if row.is_last_in_group %}gp-group-end{% endif %}"
+                            style="--gp-row-fill: #{{ block.fill_color }};">
+                            <td class="gp-me-sticky gp-me-sticky-1 gp-me-sr">{{ row.sr_no }}</td>
+                            {% if forloop.first and forloop.parentloop.first %}
+                            <td class="gp-me-sticky gp-me-sticky-2 gp-me-fill-div" rowspan="{{ total_students }}">{{ batch_name }}</td>
+                            {% endif %}
+                            {% if forloop.first %}
+                            <td class="gp-me-sticky gp-me-sticky-3 gp-me-fill-group" rowspan="{{ block.rowspan }}">{{ block.group_id }}</td>
+                            {% endif %}
+                            <td class="gp-me-sticky gp-me-sticky-4 gp-me-roll">{{ row.roll_no }}</td>
+                            <td class="gp-me-sticky gp-me-sticky-5 gp-me-enroll" title="{{ row.enrollment_no }}">{{ row.enrollment_no }}</td>
+                            <td class="gp-me-name" title="{{ row.display_name }}">{{ row.display_name }}</td>
+                            {% for col in display_cols %}
+                            {% if col.key == 'gender_diversity' %}
+                            {% if forloop.parentloop.first %}
+                            <td class="gp-me-fill-meta" rowspan="{{ block.rowspan }}">{{ block.meta.gender_diversity }}</td>
+                            {% endif %}
+                            {% elif col.key == 'religion_diversity' %}
+                            {% if forloop.parentloop.first %}
+                            <td class="gp-me-fill-meta" rowspan="{{ block.rowspan }}">{{ block.meta.religion_diversity }}</td>
+                            {% endif %}
+                            {% elif col.key == 'case' %}
+                            {% if forloop.parentloop.first %}
+                            <td class="gp-me-fill-meta" rowspan="{{ block.rowspan }}">{{ block.meta.case }}</td>
+                            {% endif %}
+                            {% endif %}
+                            {% endfor %}
+                            {% for cell in row.cells %}
+                            {% if cell.col.type == 'remarks' %}
+                            <td>
+                                <input type="text" name="remarks_{{ row.student_pk }}" class="gp-me-input" value="{{ cell.value }}" placeholder="Optional"{% if read_only %} readonly{% endif %}>
+                            </td>
+                            {% elif cell.col.type == 'mark' %}
+                            <td class="gp-me-fill-mark">
+                                <input type="text" name="{{ cell.col.field_name }}_{{ row.student_pk }}" class="gp-me-input mark-input" data-col-type="mark" value="{{ cell.value }}"
+                                       {% if cell.col.max_marks %}placeholder="/{{ cell.col.max_marks }}"{% endif %}{% if read_only %} readonly{% endif %}>
+                            </td>
+                            {% endif %}
+                            {% endfor %}
+                            <td class="gp-me-sticky-total gp-me-fill-total gp-me-total total-cell">{% if row.total != '' and row.total != None %}{{ row.total }}{% endif %}</td>
+                            {% if has_final_marks_col %}
+                            <td class="gp-me-sticky-final gp-me-fill-final final-cell">&nbsp;</td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    {% empty %}
+                        <tr><td colspan="20" class="text-center text-muted py-5">No students in this group split.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if group_blocks %}
+            <div class="me-actions gp-me-actions px-3 pb-3">
+                {% if not read_only %}
+                <button type="submit" name="action" value="save" class="btn btn-primary-custom"><i class="bi bi-save"></i> Save Marks</button>
+                {% if not gp_duty.marks_locked %}
+                <button type="submit" name="action" value="verify_lock" class="btn btn-success"
+                        onclick="return confirm('Verify and lock marks? After this you cannot edit them.');">
+                    <i class="bi bi-lock"></i> Verify and Lock
+                </button>
+                {% endif %}
+                {% endif %}
+                <a href="{% if back_url %}{{ back_url }}{% else %}{% url 'portal:mark_entry_list' %}{% endif %}" class="btn btn-outline-secondary">{% if read_only %}Back{% else %}Back to Duties{% endif %}</a>
+                <span class="gp-me-count"><i class="bi bi-people"></i> {{ total_students }} students · {{ group_blocks|length }} groups · group-wise layout</span>
+            </div>
+            {% endif %}
+        {% if read_only %}</div>{% else %}</form>{% endif %}
+    </div>
+</div>
+{% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    function parseNum(v) {
+        if (!v || String(v).trim().toUpperCase() === 'AB') return null;
+        var n = parseFloat(v);
+        return isNaN(n) ? null : n;
+    }
+    document.querySelectorAll('tbody tr[data-student]').forEach(function(row) {
+        function updateTotal() {
+            var sum = 0, has = false;
+            row.querySelectorAll('.mark-input').forEach(function(inp) {
+                var n = parseNum(inp.value);
+                if (n !== null) { sum += n; has = true; }
+            });
+            var cell = row.querySelector('.total-cell');
+            if (cell) cell.textContent = has ? sum : '';
+        }
+        row.querySelectorAll('.mark-input').forEach(function(inp) {
+            if (!inp.readOnly) inp.addEventListener('input', updateTotal);
+        });
+        updateTotal();
+    });
+})();
+</script>
+{% endblock %}

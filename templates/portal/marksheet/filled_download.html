@@ -1,8 +1,8 @@
 {% extends 'portal/base.html' %}
-{% block title %}Hard Copy Marksheet Templates{% endblock %}
+{% block title %}Marks Filled Marksheet{% endblock %}
 {% block content %}
 
-{% include 'portal/includes/section_header.html' with icon='printer' title='Hard Copy Marksheet Templates' subtitle='Download blank marksheet templates without marks — for hard-copy / invigilation use' %}
+{% include 'portal/includes/section_header.html' with icon='file-earmark-check' title='Marks Filled Marksheet' subtitle='Download marksheets with faculty-entered marks — only after Verify & Lock' %}
 
 {% if show_dept_filter %}
 <div class="filter-bar mb-4 flex-wrap">
@@ -13,12 +13,18 @@
 {% if not department %}
 <div class="portal-card form-panel" style="max-width: 640px;">
     <div class="portal-card-body">
-        <div class="alert alert-warning mb-0">Select a department to download hard copy marksheets.</div>
+        <div class="alert alert-warning mb-0">Select a department to download filled marksheets.</div>
     </div>
 </div>
 {% else %}
 
-<form method="post" id="hardCopyForm">
+<div class="alert alert-info py-2 small mb-4">
+    <i class="bi bi-info-circle me-1"></i>
+    Download is allowed only when marks are <strong>Verified &amp; Locked</strong>.
+    If any IPE batch or GP split is still pending, you will see a warning instead of a file.
+</div>
+
+<form method="post" id="filledMsForm">
     {% csrf_token %}
     <div class="row g-4">
         <div class="col-lg-6">
@@ -37,7 +43,7 @@
                         <div class="col-12" id="gpSubjectWrap" style="display:none;">
                             <label class="form-label">GP Subject</label>
                             {{ download_form.subject_selection }}
-                            <div class="form-text">GP downloads sheets split-wise (same as Group Formations).</div>
+                            <div class="form-text">GP filled marksheets are generated <strong>split-wise</strong>.</div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Semester Label</label>
@@ -48,7 +54,7 @@
                             {{ download_form.department_label }}
                         </div>
                         <div class="col-12" id="ipeFormatWrap">
-                            <label class="form-label">Download Format <span class="text-muted fw-normal">(IPE only)</span></label>
+                            <label class="form-label">Download Format <span class="text-muted fw-normal">(IPE filled only)</span></label>
                             {{ download_form.download_type }}
                         </div>
                     </div>
@@ -56,16 +62,31 @@
             </div>
         </div>
 
-        <div class="col-lg-6">
-            <div class="portal-card form-panel h-100">
-                <div class="portal-card-header"><i class="bi bi-printer"></i> Download Hard Copy</div>
+        <div class="col-lg-6 d-flex flex-column gap-4">
+            <div class="portal-card form-panel flex-grow-1">
+                <div class="portal-card-header"><i class="bi bi-download"></i> Download Filled Marksheet</div>
                 <div class="portal-card-body d-flex flex-column">
                     <p class="small text-muted mb-3">
-                        Blank marksheet with student / group layout only — <strong>no faculty marks</strong>.
-                        IPE: one sheet per batch (or combined). GP: one sheet per formation split.
+                        Full marksheet with entered marks.
+                        IPE: one sheet per batch (or combined). GP: one sheet per locked formation split.
                     </p>
-                    <button type="submit" name="action" value="hard_copy" class="btn btn-accent w-100 mt-auto py-2">
-                        <i class="bi bi-file-earmark-excel"></i> Download Hard Copy Marksheet
+                    <button type="submit" name="action" value="filled" class="btn btn-accent w-100 mt-auto py-2">
+                        <i class="bi bi-file-earmark-excel"></i> Download Filled Marksheet
+                    </button>
+                </div>
+            </div>
+
+            <div class="portal-card form-panel flex-grow-1">
+                <div class="portal-card-header"><i class="bi bi-table"></i> Download Compiled Marksheet</div>
+                <div class="portal-card-body d-flex flex-column">
+                    <p class="small text-muted mb-3">
+                        <strong>IPE:</strong> summary of all batches in one sheet.<br>
+                        <strong>GP:</strong> all batches and all splits in <strong>one single sheet</strong>
+                        (filled marksheet uses multiple sheets — one per split).
+                        Requires all batches / splits verified &amp; locked.
+                    </p>
+                    <button type="submit" name="action" value="compiled" class="btn btn-primary-custom w-100 mt-auto py-2">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> Download Compiled Marksheet
                     </button>
                 </div>
             </div>

@@ -9,6 +9,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from .models import FormField, GPGroup, GPGroupMemberDetail, Student
+from .utils import sort_students_by_roll
 
 IPE_TITLE = 'Internal Practical Exam Attendance Sheet'
 GP_TITLE = 'GP Attendance Sheet'
@@ -592,9 +593,11 @@ def generate_gp_attendance_workbook(
 
 
 def generate_ipe_attendance_workbook(department, subject, semester_label, department_label):
-    """Generate IPE attendance workbook — one sheet per batch."""
-    students_qs = Student.objects.filter(department=department).order_by('batch', 'roll_no')
-    batches = list(students_qs.values_list('batch', flat=True).distinct().order_by('batch'))
+    """Generate IPE attendance workbook — one sheet per batch, students by roll no."""
+    students_qs = Student.objects.filter(department=department)
+    batches = list(
+        students_qs.values_list('batch', flat=True).distinct().order_by('batch')
+    )
     if not batches:
         batches = ['A1']
 
@@ -602,7 +605,8 @@ def generate_ipe_attendance_workbook(department, subject, semester_label, depart
     wb.remove(wb.active)
 
     for batch in batches:
-        batch_students = list(students_qs.filter(batch=batch))
+        # Numeric roll sort (1, 2, 3 … not 1, 10, 11)
+        batch_students = sort_students_by_roll(students_qs.filter(batch=batch))
         ws = wb.create_sheet(title=str(batch)[:31])
         _build_ipe_sheet(
             ws, batch_students, batch,
