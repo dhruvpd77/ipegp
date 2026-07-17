@@ -9,7 +9,7 @@ import os
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
-from django.http import HttpResponse, FileResponse, HttpResponseForbidden
+from django.http import HttpResponse, FileResponse, HttpResponseForbidden, JsonResponse
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 import mimetypes
 
@@ -1972,8 +1972,38 @@ def final_marksheet_download(request):
 
 
 @role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
+def filled_marksheet_pending_check(request):
+    """JSON: pending IPE batches / GP splits for confirm-before-download warning."""
+    ctx = get_user_context(request.user)
+    dept = resolve_department(request.user, ctx, request)
+    if not dept:
+        return JsonResponse({'pending': [], 'kind': 'batches'})
+
+    exam_type = request.GET.get('exam_type', 'IPE')
+    if exam_type == 'GP':
+        from .group_formation import primary_subject_for_selection
+        sel = (request.GET.get('subject_selection') or '').strip()
+        if not sel:
+            return JsonResponse({'pending': [], 'kind': 'splits'})
+        gp_subject = primary_subject_for_selection(dept, sel)
+        if not gp_subject:
+            return JsonResponse({'pending': [], 'kind': 'splits'})
+        pending = pending_gp_splits_for_filled_download(dept, gp_subject, sel)
+        return JsonResponse({'pending': pending, 'kind': 'splits'})
+
+    subject_id = request.GET.get('subject')
+    if not subject_id:
+        return JsonResponse({'pending': [], 'kind': 'batches'})
+    subject = Subject.objects.filter(pk=subject_id).first()
+    if not subject:
+        return JsonResponse({'pending': [], 'kind': 'batches'})
+    pending = pending_ipe_batches_for_filled_download(dept, subject)
+    return JsonResponse({'pending': pending, 'kind': 'batches'})
+
+
+@role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
 def filled_marksheet_download(request):
-    """Marks-filled marksheet — only after verify & lock for each batch / GP split."""
+    """Marks-filled marksheet download (IPE & GP). Pending verify/lock only warns in UI."""
     ctx = get_user_context(request.user)
     dept = resolve_department(request.user, ctx, request)
     download_form = FinalMarksheetDownloadForm()
@@ -2023,50 +2053,32 @@ def filled_marksheet_download(request):
                 elif not get_formation(dept, formation_sel):
                     messages.error(request, 'Configure Group Formations for this GP subject before downloading.')
                 else:
-                    pending = pending_gp_splits_for_filled_download(dept, gp_subject, sel)
-                    if pending:
-                        messages.warning(
-                            request,
-                            'Cannot download — these GP splits are still pending '
-                            '(marks must be verified & locked): '
-                            + ', '.join(pending),
-                        )
-                    else:
-                        tmpl = resolve_marksheet_template(exam_type, gp_subject, dept)
-                        if not tmpl:
-                            messages.error(request, f'No GP marksheet template for {gp_subject.name}. Upload template first.')
-                        elif action == 'compiled':
-                            return generate_compiled_marksheet_workbook(
-                                exam_type, gp_subject, dept, semester_label, department_label,
-                                template=tmpl, subject_selection=sel,
-                            )
-                        else:
-                            return generate_marksheet_workbook(
-                                tmpl, dept, semester_label, department_label,
-                                combined=False, subject_selection=sel, include_marks=True,
-                            )
-            else:
-                pending = pending_ipe_batches_for_filled_download(dept, subject)
-                if pending:
-                    messages.warning(
-                        request,
-                        'Cannot download — these batches are still pending '
-                        '(marks must be verified & locked): '
-                        + ', '.join(pending),
-                    )
-                else:
-                    tmpl = resolve_marksheet_template(exam_type, subject, dept)
+                    tmpl = resolve_marksheet_template(exam_type, gp_subject, dept)
                     if not tmpl:
-                        messages.error(request, f'No {exam_type} marksheet template for {subject.name}. Upload template first.')
+                        messages.error(request, f'No GP marksheet template for {gp_subject.name}. Upload template first.')
                     elif action == 'compiled':
                         return generate_compiled_marksheet_workbook(
-                            exam_type, subject, dept, semester_label, department_label, template=tmpl,
+                            exam_type, gp_subject, dept, semester_label, department_label,
+                            template=tmpl, subject_selection=sel,
                         )
                     else:
                         return generate_marksheet_workbook(
                             tmpl, dept, semester_label, department_label,
-                            combined=combined, include_marks=True,
+                            combined=False, subject_selection=sel, include_marks=True,
                         )
+            else:
+                tmpl = resolve_marksheet_template(exam_type, subject, dept)
+                if not tmpl:
+                    messages.error(request, f'No {exam_type} marksheet template for {subject.name}. Upload template first.')
+                elif action == 'compiled':
+                    return generate_compiled_marksheet_workbook(
+                        exam_type, subject, dept, semester_label, department_label, template=tmpl,
+                    )
+                else:
+                    return generate_marksheet_workbook(
+                        tmpl, dept, semester_label, department_label,
+                        combined=combined, include_marks=True,
+                    )
         else:
             messages.error(request, 'Please check the form — some fields are missing or invalid.')
 

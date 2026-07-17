@@ -1252,8 +1252,8 @@ def generate_compiled_gp_marksheet_workbook(
     include_marks=True,
 ):
     """
-    COMPILE GP marksheet — all batches and all formation splits on a single sheet
-    (same group layout as filled marksheet, not multi-tab).
+    COMPILE GP marksheet — all groups from all batches/splits on a single sheet,
+    sorted batch-wise by Group ID (A1_1, A1_2, … then A2_1, …).
     """
     from .group_formation import (
         formation_key_for_selection,
@@ -1271,6 +1271,7 @@ def generate_compiled_gp_marksheet_workbook(
     subject_name = display_subject.name if display_subject else 'GP'
     subject_code = (display_subject.code or '') if display_subject else ''
 
+    seen_pks = set()
     group_entries = []
     marks_by_student = {}
     for _title, batch, split_index, groups, group_to_gid in iter_formation_sheets(
@@ -1281,11 +1282,29 @@ def generate_compiled_gp_marksheet_workbook(
                 get_gp_marks_for_split(department, template.subject, batch, split_index)
             )
         for group in groups:
+            if group.pk in seen_pks:
+                continue
+            seen_pks.add(group.pk)
             group_entries.append({
                 'batch': batch,
                 'group': group,
                 'gid': group_to_gid.get(group),
             })
+
+    # Single sheet: batch-wise, then Group ID ascending (A1_1 … A1_10, A2_1 …)
+    def _entry_sort_key(entry):
+        group = entry['group']
+        batch = entry.get('batch') or (group.leader.batch if group.leader_id else '') or 'Z'
+        gid = entry.get('gid') or ''
+        num = 0
+        if gid and '_' in str(gid):
+            try:
+                num = int(str(gid).rsplit('_', 1)[-1])
+            except ValueError:
+                pass
+        return (str(batch), num, str(gid), group.pk)
+
+    group_entries.sort(key=_entry_sort_key)
 
     wb = openpyxl.Workbook()
     ws = wb.active

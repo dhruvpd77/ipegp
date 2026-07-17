@@ -69,6 +69,7 @@ urlpatterns = [
     path('marksheets/template/<int:pk>/delete/', views.marksheet_template_delete, name='marksheet_template_delete'),
     path('marksheets/final-download/', views.final_marksheet_download, name='final_marksheet_download'),
     path('marksheets/filled-download/', views.filled_marksheet_download, name='filled_marksheet_download'),
+    path('marksheets/filled-download/pending-check/', views.filled_marksheet_pending_check, name='filled_marksheet_pending_check'),
 
     # IPE Invitation Letters
     path('invitation-letter/', views.ipe_invitation_letter, name='ipe_invitation_letter'),

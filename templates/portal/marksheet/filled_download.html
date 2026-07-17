@@ -2,7 +2,7 @@
 {% block title %}Marks Filled Marksheet{% endblock %}
 {% block content %}
 
-{% include 'portal/includes/section_header.html' with icon='file-earmark-check' title='Marks Filled Marksheet' subtitle='Download marksheets with faculty-entered marks — only after Verify & Lock' %}
+{% include 'portal/includes/section_header.html' with icon='file-earmark-check' title='Marks Filled Marksheet' subtitle='Download marksheets with faculty-entered marks' %}
 
 {% if show_dept_filter %}
 <div class="filter-bar mb-4 flex-wrap">
@@ -20,8 +20,9 @@
 
 <div class="alert alert-info py-2 small mb-4">
     <i class="bi bi-info-circle me-1"></i>
-    Download is allowed only when marks are <strong>Verified &amp; Locked</strong>.
-    If any IPE batch or GP split is still pending, you will see a warning instead of a file.
+    You can download even if some batches / splits are still pending
+    (not <strong>Verified &amp; Locked</strong>).
+    A warning will ask you to confirm before download.
 </div>
 
 <form method="post" id="filledMsForm">
@@ -68,7 +69,7 @@
                 <div class="portal-card-body d-flex flex-column">
                     <p class="small text-muted mb-3">
                         Full marksheet with entered marks.
-                        IPE: one sheet per batch (or combined). GP: one sheet per locked formation split.
+                        IPE: one sheet per batch (or combined). GP: one sheet per formation split.
                     </p>
                     <button type="submit" name="action" value="filled" class="btn btn-accent w-100 mt-auto py-2">
                         <i class="bi bi-file-earmark-excel"></i> Download Filled Marksheet
@@ -81,9 +82,8 @@
                 <div class="portal-card-body d-flex flex-column">
                     <p class="small text-muted mb-3">
                         <strong>IPE:</strong> summary of all batches in one sheet.<br>
-                        <strong>GP:</strong> all batches and all splits in <strong>one single sheet</strong>
-                        (filled marksheet uses multiple sheets — one per split).
-                        Requires all batches / splits verified &amp; locked.
+                        <strong>GP:</strong> all groups from all batches on <strong>one single sheet</strong>,
+                        sorted by Group ID batch-wise (A1_1, A1_2, … then A2_1, …).
                     </p>
                     <button type="submit" name="action" value="compiled" class="btn btn-primary-custom w-100 mt-auto py-2">
                         <i class="bi bi-file-earmark-spreadsheet"></i> Download Compiled Marksheet
@@ -112,6 +112,74 @@
     }
     exam?.addEventListener('change', sync);
     sync();
+
+    const form = document.getElementById('filledMsForm');
+    if (!form) return;
+
+    let bypassConfirm = false;
+    let pendingAction = 'filled';
+
+    form.addEventListener('click', function (e) {
+        const btn = e.target.closest('button[type="submit"][name="action"]');
+        if (btn) pendingAction = btn.value || 'filled';
+    });
+
+    form.addEventListener('submit', async function (e) {
+        if (bypassConfirm) {
+            bypassConfirm = false;
+            return;
+        }
+        e.preventDefault();
+
+        const examType = exam?.value || 'IPE';
+        const params = new URLSearchParams({ exam_type: examType });
+        const pageDept = new URLSearchParams(window.location.search).get('department');
+        if (pageDept) params.set('department', pageDept);
+        if (examType === 'GP') {
+            const sel = document.getElementById('id_final_ms_subject_selection');
+            if (sel?.value) params.set('subject_selection', sel.value);
+        } else {
+            const subj = document.getElementById('id_final_ms_subject');
+            if (subj?.value) params.set('subject', subj.value);
+        }
+
+        let pending = [];
+        let kind = examType === 'GP' ? 'splits' : 'batches';
+        try {
+            const res = await fetch('{% url "portal:filled_marksheet_pending_check" %}?' + params.toString(), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            });
+            if (res.ok) {
+                const data = await res.json();
+                pending = data.pending || [];
+                kind = data.kind || kind;
+            }
+        } catch (err) {
+            /* If check fails, still allow download after generic confirm */
+        }
+
+        if (pending.length) {
+            const label = kind === 'splits' ? 'GP splits' : 'batches';
+            const ok = confirm(
+                'Warning: these ' + label + ' are still pending (not Verified & Locked):\n\n'
+                + pending.join(', ')
+                + '\n\nClick OK to download anyway, or Cancel to go back.'
+            );
+            if (!ok) return;
+        }
+
+        let actionInput = form.querySelector('input[type="hidden"][name="action"]');
+        if (!actionInput) {
+            actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'action';
+            form.appendChild(actionInput);
+        }
+        actionInput.value = pendingAction;
+        bypassConfirm = true;
+        form.submit();
+    });
 })();
 </script>
 {% endblock %}
