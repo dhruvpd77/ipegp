@@ -201,12 +201,16 @@
 }
 
 .me-table .me-enroll {
-    font-family: ui-monospace, monospace;
-    font-size: 0.72rem;
-    color: #64748b;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #0b3d5c;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.35;
 }
 
 .me-table .me-sr {

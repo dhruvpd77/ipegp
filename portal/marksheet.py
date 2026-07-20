@@ -154,6 +154,8 @@ def _cell_value_from_mark(col_def, mark_entry):
     if ctype == 'remarks':
         return mark_entry.remarks or data.get('remarks', '')
     if ctype == 'total':
+        if is_absent_remarks(mark_entry.remarks) or is_absent_remarks(data.get('total')):
+            return 'AB'
         t = data.get('total')
         if t not in (None, '', 0, '0'):
             return t
@@ -705,7 +707,7 @@ def _build_batch_sheet(
 
     notes = (
         'N.B : \n'
-        '1) For absent students, enter "AB" in each marks column.\n'
+        '1) For absent students, enter "AB" in Remarks — Total will show AB; other mark fields are not required.\n'
         '2) Do not merge any entries.'
     )
     _merge_header(ws, 7, 1, 7, last_col, notes)
@@ -983,7 +985,7 @@ def _build_gp_marksheet_sheet(
 
     notes = (
         'N.B : \n'
-        '1) For absent students, enter "AB" in each marks column.\n'
+        '1) For absent students, enter "AB" in Remarks — Total will show AB; other mark fields are not required.\n'
         '2) Do not merge any entries.'
     )
     _merge_and_style(ws, f'A7:{last_letter}7', notes, font=FONT_GP_NOTES, alignment=ALIGN_LEFT)
@@ -1699,13 +1701,49 @@ def _editable_cols_for_duty(duty):
     ]
 
 
+def is_absent_remarks(remarks):
+    """True when remarks indicate the student is absent (AB)."""
+    return str(remarks or '').strip().upper() in ('AB', 'ABSENT', 'A/B')
+
+
+def _is_optional_mark_column(col):
+    """Aim Change / Late Coming deductions are never required to complete a row."""
+    ctype = col.get('type') or ''
+    if ctype in ('deduction_aim', 'deduction_late', 'remarks', 'total'):
+        return True
+    label = ' '.join([
+        str(col.get('label9') or ''),
+        str(col.get('label8') or ''),
+        str(col.get('field_name') or ''),
+        str(col.get('key') or ''),
+    ]).lower()
+    if 'aim' in label and 'change' in label:
+        return True
+    if 'late' in label and ('coming' in label or 'deduct' in label or label.strip() == 'late'):
+        return True
+    if re.search(r'\blate\b', label) and 'program' not in label:
+        return True
+    return False
+
+
 def is_student_duty_mark_complete(mark, editable_cols):
-    """True when a student row has all required marks saved for this duty."""
+    """True when a student row has all required marks saved for this duty.
+
+    Required: program mark columns (+ final chit if present).
+    Optional: Aim Change, Late Coming, remarks.
+    Special: remarks = AB (absent) → row is complete without other marks.
+    """
     if mark is None:
         return False
+    if is_absent_remarks(mark.remarks):
+        return True
     data = mark.mark_data or {}
-    required = [c for c in editable_cols if c['type'] in ('mark', 'final_chit')]
+    required = [
+        c for c in editable_cols
+        if c['type'] in ('mark', 'final_chit') and not _is_optional_mark_column(c)
+    ]
     if not required:
+        # No program/final-chit columns — any saved mark data counts as complete
         return bool(data) or bool((mark.remarks or '').strip())
     for col in required:
         fname = col.get('field_name', col['key'])
@@ -1764,7 +1802,10 @@ def build_duty_marksheet_page_context(duty):
                 val = data.get(fname, '')
             cells.append({'col': col, 'value': val})
         total_val, has_total = compute_mark_entry_total(editable_cols, data)
-        if not has_total:
+        remarks_val = (mark.remarks if mark else '') or ''
+        if is_absent_remarks(remarks_val):
+            total_val = 'AB'
+        elif not has_total:
             total_val = ''
         student_rows.append({'student': s, 'mark': mark, 'cells': cells, 'total': total_val})
 
@@ -1829,6 +1870,20 @@ def save_duty_marks(duty, post, students, user):
             if val:
                 mark_data[fname] = val
         remarks = post.get(f'remarks_{stu.pk}', '').strip()
+
+        if is_absent_remarks(remarks):
+            # Absent: other mark fields not required; Total stored/shown as AB
+            MarkEntry.objects.update_or_create(
+                student=stu,
+                duty_assignment=duty,
+                defaults={
+                    'mark_data': {'total': 'AB'},
+                    'marks_obtained': 0,
+                    'remarks': 'AB',
+                    'entered_by': user,
+                },
+            )
+            continue
 
         numeric_sum, has_numeric = compute_mark_entry_total(editable, mark_data)
 
@@ -2006,7 +2061,10 @@ def _gp_group_blocks_for_duty(gp_duty, existing_marks, editable_cols, display_co
                 cells.append({'col': col, 'value': val})
             mark_only_cols = [c for c in editable_cols if c['type'] == 'mark']
             total_val, has_total = compute_mark_entry_total(mark_only_cols, data)
-            if not has_total:
+            remarks_val = (mark.remarks if mark else '') or ''
+            if is_absent_remarks(remarks_val):
+                total_val = 'AB'
+            elif not has_total:
                 total_val = ''
             rows.append({
                 'student': student,
@@ -2038,6 +2096,8 @@ def _gp_group_blocks_for_duty(gp_duty, existing_marks, editable_cols, display_co
 def is_student_gp_duty_mark_complete(mark, editable_cols):
     if mark is None:
         return False
+    if is_absent_remarks(mark.remarks):
+        return True
     data = mark.mark_data or {}
     required = [c for c in editable_cols if c['type'] == 'mark']
     if not required:
@@ -2133,6 +2193,19 @@ def save_gp_duty_marks(gp_duty, post, students, user):
                 mark_data[fname] = val
         remarks = post.get(f'remarks_{stu.pk}', '').strip()
 
+        if is_absent_remarks(remarks):
+            MarkEntry.objects.update_or_create(
+                student=stu,
+                gp_duty_assignment=gp_duty,
+                defaults={
+                    'mark_data': {'total': 'AB'},
+                    'marks_obtained': 0,
+                    'remarks': 'AB',
+                    'entered_by': user,
+                },
+            )
+            continue
+
         mark_cols = [c for c in editable if c['type'] == 'mark']
         numeric_sum, has_numeric = compute_mark_entry_total(mark_cols, mark_data)
 
@@ -2178,9 +2251,9 @@ def _short_column_header(col):
     if ctype == 'final_chit':
         return {'short': 'Final Chit', 'sub': ''}
     if ctype == 'deduction_aim':
-        return {'short': 'Aim Change', 'sub': '−2'}
+        return {'short': 'Aim Change', 'sub': '−2 · optional'}
     if ctype == 'deduction_late':
-        return {'short': 'Late Coming', 'sub': '−1'}
+        return {'short': 'Late', 'sub': '−1 · optional'}
     if ctype == 'remarks':
         return {'short': 'Remarks', 'sub': ''}
     if ctype == 'mark':

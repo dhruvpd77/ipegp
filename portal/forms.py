@@ -282,11 +282,23 @@ class FacultyDutyAssignmentForm(forms.Form):
         }),
         label='External Faculty Name',
     )
+    external_email = forms.EmailField(
+        required=False,
+        widget=forms.EmailInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'external@example.com',
+            'id': 'id_ipe_external_email',
+        }),
+        label='Email ID (External)',
+    )
     batch = forms.ChoiceField(choices=[], widget=forms.Select(attrs={'class': 'form-select'}))
     duty_date = forms.DateField(widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}))
     time_slot = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 9:00 am to 10:30 am'}),
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g. 9:00 TO 10:30',
+        }),
     )
     room_no = forms.CharField(
         required=False,
@@ -299,6 +311,9 @@ class FacultyDutyAssignmentForm(forms.Form):
 
     def clean_external_faculty_name(self):
         return (self.cleaned_data.get('external_faculty_name') or '').strip().upper()
+
+    def clean_external_email(self):
+        return (self.cleaned_data.get('external_email') or '').strip().lower()
 
     def clean(self):
         cleaned = super().clean()

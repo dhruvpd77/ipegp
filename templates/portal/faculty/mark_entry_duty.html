@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}{% if read_only %}View Marksheet{% else %}Mark Entry{% endif %} — {{ duty.subject.name }} {{ duty.batch }}{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/marksheet-entry.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/marksheet-entry.css' %}?v=3">
 {% endblock %}
 {% block content %}
 <div class="me-page">
@@ -33,7 +33,7 @@
     {% if read_only %}
     <span class="text-muted">{% if duty.marks_locked %}Marks are locked — view only.{% else %}Read-only view of marks entered by internal faculty.{% endif %}</span>
     {% else %}
-    <span class="text-muted">Enter deductions as <strong>−2</strong>, <strong>−1</strong> · Total = sum (+) of all mark columns · <strong>AB</strong> for absent.{% if is_admin_entry %} {% if duty.marks_locked %}Semester/Super admin can edit locked marks.{% else %}Admin can view and edit marks.{% endif %}{% endif %}</span>
+    <span class="text-muted">Program marks are required. <strong>Aim Change</strong> and <strong>Late</strong> are optional (enter −2 / −1 only if applicable). Total = sum (+) of filled mark columns · <strong>AB</strong> for absent.{% if is_admin_entry %} {% if duty.marks_locked %}Semester/Super admin can edit locked marks.{% else %}Admin can view and edit marks.{% endif %}{% endif %}</span>
     {% endif %}
 </div>
 
@@ -91,9 +91,9 @@
                             {% if block.col.type == 'final_chit' %}
                             <th rowspan="2" class="me-h-chit">Final Chit</th>
                             {% elif block.col.type == 'deduction_aim' %}
-                            <th rowspan="2" class="me-h-aim me-h-sum">Aim Change<span class="me-th-op">+</span><span class="me-th-sub">(−2)</span></th>
+                            <th rowspan="2" class="me-h-aim me-h-sum">Aim Change<span class="me-th-op">+</span><span class="me-th-sub">(−2 · optional)</span></th>
                             {% elif block.col.type == 'deduction_late' %}
-                            <th rowspan="2" class="me-h-late me-h-sum">Late<span class="me-th-op">+</span><span class="me-th-sub">(−1)</span></th>
+                            <th rowspan="2" class="me-h-late me-h-sum">Late<span class="me-th-op">+</span><span class="me-th-sub">(−1 · optional)</span></th>
                             {% elif block.col.type == 'remarks' %}
                             <th rowspan="2">Remarks</th>
                             {% else %}
@@ -131,11 +131,11 @@
                         </td>
                         {% elif cell.col.type == 'deduction_aim' %}
                         <td class="me-fill-aim">
-                            <input type="text" name="{{ cell.col.field_name }}_{{ row.student.pk }}" class="me-input me-input-narrow mark-input" data-col-type="deduction_aim" value="{{ cell.value }}" placeholder="−2"{% if read_only %} readonly{% endif %}>
+                            <input type="text" name="{{ cell.col.field_name }}_{{ row.student.pk }}" class="me-input me-input-narrow mark-input" data-col-type="deduction_aim" value="{{ cell.value }}" placeholder="opt." title="Optional — enter −2 only if aim was changed"{% if read_only %} readonly{% endif %}>
                         </td>
                         {% elif cell.col.type == 'deduction_late' %}
                         <td class="me-fill-late">
-                            <input type="text" name="{{ cell.col.field_name }}_{{ row.student.pk }}" class="me-input me-input-narrow mark-input" data-col-type="deduction_late" value="{{ cell.value }}" placeholder="−1"{% if read_only %} readonly{% endif %}>
+                            <input type="text" name="{{ cell.col.field_name }}_{{ row.student.pk }}" class="me-input me-input-narrow mark-input" data-col-type="deduction_late" value="{{ cell.value }}" placeholder="opt." title="Optional — enter −1 only if student was late"{% if read_only %} readonly{% endif %}>
                         </td>
                         {% elif cell.col.type == 'final_chit' %}
                         <td class="me-fill-chit">
@@ -148,7 +148,7 @@
                         </td>
                         {% endif %}
                         {% endfor %}
-                        <td class="me-sticky-end me-fill-total me-total total-cell">{% if row.total and row.total != '0' %}{{ row.total }}{% endif %}</td>
+                        <td class="me-sticky-end me-fill-total me-total total-cell">{% if row.total == 'AB' %}AB{% elif row.total and row.total != '0' %}{{ row.total }}{% endif %}</td>
                     </tr>
                     {% empty %}
                     <tr><td colspan="20" class="text-center text-muted py-5">No students in this batch.</td></tr>
@@ -186,19 +186,33 @@
         var n = parseFloat(v);
         return isNaN(n) ? null : n;
     }
+    function isAbsentRemarks(v) {
+        var t = String(v || '').trim().toUpperCase();
+        return t === 'AB' || t === 'ABSENT' || t === 'A/B';
+    }
     document.querySelectorAll('tbody tr[data-student]').forEach(function(row) {
         function updateTotal() {
+            var cell = row.querySelector('.total-cell');
+            if (!cell) return;
+            var remarksInp = row.querySelector('input.me-input-remarks, input[name^="remarks_"]');
+            if (remarksInp && isAbsentRemarks(remarksInp.value)) {
+                cell.textContent = 'AB';
+                return;
+            }
             var sum = 0, has = false;
             row.querySelectorAll('.mark-input').forEach(function(inp) {
                 var n = parseNum(inp.value);
                 if (n !== null) { sum += n; has = true; }
             });
-            var cell = row.querySelector('.total-cell');
-            if (cell) cell.textContent = has ? sum : '';
+            cell.textContent = has ? sum : '';
         }
         row.querySelectorAll('.mark-input').forEach(function(inp) {
             if (!inp.readOnly) inp.addEventListener('input', updateTotal);
         });
+        var remarksInp = row.querySelector('input.me-input-remarks, input[name^="remarks_"]');
+        if (remarksInp && !remarksInp.readOnly) {
+            remarksInp.addEventListener('input', updateTotal);
+        }
         updateTotal();
     });
 })();

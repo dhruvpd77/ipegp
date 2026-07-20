@@ -14,6 +14,13 @@ os.environ['DJANGO_ALLOWED_HOSTS'] = 'YOUR_USERNAME.pythonanywhere.com'
 os.environ['DJANGO_CSRF_TRUSTED_ORIGINS'] = 'https://YOUR_USERNAME.pythonanywhere.com'
 os.environ['DJANGO_SECRET_KEY'] = 'replace-with-a-long-random-secret-key'
 
+# Gmail SMTP for IPE invitation emails (paste Gmail App Password below)
+os.environ['DJANGO_EMAIL_HOST_USER'] = 'ipeljiet@gmail.com'
+os.environ['DJANGO_EMAIL_HOST_PASSWORD'] = 'your-gmail-app-password-here'
+os.environ['DJANGO_DEFAULT_FROM_EMAIL'] = (
+    'LJ Institute of Engineering & Technology <ipeljiet@gmail.com>'
+)
+
 from django.core.wsgi import get_wsgi_application
 
 application = get_wsgi_application()

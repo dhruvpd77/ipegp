@@ -75,10 +75,13 @@ urlpatterns = [
     path('invitation-letter/', views.ipe_invitation_letter, name='ipe_invitation_letter'),
     path('invitation-letter/faculty/<int:pk>/pdf/', views.ipe_invitation_pdf, name='ipe_invitation_pdf'),
     path('invitation-letter/faculty/<int:pk>/thanks/', views.ipe_thanks_pdf, name='ipe_thanks_pdf'),
+    path('invitation-letter/faculty/<int:pk>/email/', views.ipe_invitation_email, name='ipe_invitation_email'),
 
     # Faculty Duty Assignment
     path('duty/', views.faculty_duty_list, name='faculty_duty_list'),
     path('duty/<int:pk>/delete/', views.faculty_duty_delete, name='faculty_duty_delete'),
+    path('duty/external/<int:faculty_pk>/email/', views.faculty_duty_email_credentials, name='faculty_duty_email_credentials'),
+    path('duty/external/email-all/', views.faculty_duty_email_credentials_all, name='faculty_duty_email_credentials_all'),
     path('duty-gp/', views.faculty_duty_gp, name='faculty_duty_gp'),
     path('duty-gp/<int:pk>/delete/', views.faculty_duty_gp_delete, name='faculty_duty_gp_delete'),
 

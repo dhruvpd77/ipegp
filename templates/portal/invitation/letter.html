@@ -236,13 +236,26 @@
                                 <td>{{ f.college_name|default:"—" }}</td>
                                 <td>{{ f.city_state|default:"—" }}</td>
                                 <td class="small">{{ f.email|default:"—" }}</td>
-                                <td class="text-nowrap">
+                <td class="text-nowrap">
                                     <a href="{% url 'portal:ipe_invitation_pdf' f.pk %}" class="btn btn-sm btn-primary-custom" title="Download Invitation Letter">
                                         <i class="bi bi-download"></i> Invite
                                     </a>
                                     <a href="{% url 'portal:ipe_thanks_pdf' f.pk %}" class="btn btn-sm btn-outline-success" title="Download Thanks Letter">
                                         <i class="bi bi-envelope-heart"></i> Thanks
                                     </a>
+                                    {% if f.email %}
+                                    <form method="post" action="{% url 'portal:ipe_invitation_email' f.pk %}" class="d-inline"
+                                          onsubmit="return confirm('Send invitation email with letter + syllabus to {{ f.email }}?');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-primary" title="Email invitation letter &amp; syllabus to {{ f.email }}">
+                                            <i class="bi bi-envelope-at"></i> Email
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="No email in Excel for this examiner">
+                                        <i class="bi bi-envelope-at"></i> Email
+                                    </button>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% empty %}
@@ -255,7 +268,9 @@
                 </div>
                 <p class="small text-muted mt-3 mb-0">
                     Invite PDF: <code>NAME_INVITE LETTER.pdf</code> ·
-                    Thanks PDF: <code>NAME_THANK LETTER.pdf</code>
+                    Thanks PDF: <code>NAME_THANK LETTER.pdf</code> ·
+                    <strong>Email</strong> sends the invitation letter + subject syllabus from
+                    <code>ipeljiet@gmail.com</code>
                     (date on thanks letter = Date of Practical; signature from Advisor Signature above).
                 </p>
             </div>

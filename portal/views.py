@@ -1460,18 +1460,23 @@ def _faculty_code_from_name(department, name, prefix='FAC'):
     return code
 
 
-def _faculty_for_ipe_manual_name(department, name, *, is_external):
+def _faculty_for_ipe_manual_name(department, name, *, is_external, email=''):
     clean_name = (name or '').strip().upper()
     if not clean_name:
         return None
+    email_addr = (email or '').strip().lower()
     qs = Faculty.objects.filter(department=department, is_external=is_external)
     faculty = qs.filter(name__iexact=clean_name).first()
     if faculty:
+        if email_addr and '@' in email_addr and (faculty.email or '').lower() != email_addr:
+            faculty.email = email_addr
+            faculty.save(update_fields=['email'])
         return faculty
     return Faculty.objects.create(
         department=department,
         name=clean_name,
         mentor_code=_faculty_code_from_name(department, clean_name, prefix='EXT' if is_external else 'FAC'),
+        email=email_addr if '@' in email_addr else '',
         is_external=is_external,
     )
 
@@ -1483,6 +1488,44 @@ def _setup_ipe_duty_form(form, subjects, faculty_qs, batches):
     choices += [(str(f.pk), f.name) for f in faculty_qs.filter(is_external=False).order_by('name')]
     choices.append(('OTHER', 'Others (enter name)'))
     form.fields['internal_faculty'].choices = choices
+
+
+def _ipe_duty_row_key(duty):
+    return (
+        duty.duty_date,
+        duty.subject_id,
+        duty.exam_type,
+        duty.batch,
+        duty.time_slot or '',
+        duty.room_no or '',
+    )
+
+
+def _find_ipe_duty_pair(dept, duty_pk):
+    """Return (internal_duty, external_duty) for a duty row keyed by either side's pk."""
+    anchor = FacultyDutyAssignment.objects.filter(
+        pk=duty_pk, department=dept, exam_type=FacultyDutyAssignment.ExamType.IPE,
+    ).select_related('faculty', 'subject').first()
+    if not anchor:
+        return None, None
+    key = _ipe_duty_row_key(anchor)
+    siblings = FacultyDutyAssignment.objects.filter(
+        department=dept,
+        exam_type=FacultyDutyAssignment.ExamType.IPE,
+        duty_date=key[0],
+        subject_id=key[1],
+        batch=key[3],
+        time_slot=key[4],
+        room_no=key[5],
+        is_active=True,
+    ).select_related('faculty', 'subject')
+    internal = siblings.filter(duty_role=FacultyDutyAssignment.DutyRole.INTERNAL).first()
+    external = siblings.filter(duty_role=FacultyDutyAssignment.DutyRole.EXTERNAL).first()
+    if anchor.duty_role == FacultyDutyAssignment.DutyRole.INTERNAL:
+        internal = internal or anchor
+    else:
+        external = external or anchor
+    return internal, external
 
 
 @role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
@@ -1510,7 +1553,33 @@ def faculty_duty_list(request):
     else:
         batches = Student.objects.values_list('batch', flat=True).distinct().order_by('batch')
 
-    duty_form = FacultyDutyAssignmentForm()
+    editing_internal = None
+    editing_external = None
+    edit_pk = request.GET.get('edit') or request.POST.get('edit_pk')
+    if dept and edit_pk:
+        editing_internal, editing_external = _find_ipe_duty_pair(dept, edit_pk)
+
+    if editing_internal or editing_external:
+        anchor = editing_internal or editing_external
+        initial = {
+            'subject': anchor.subject_id,
+            'batch': anchor.batch,
+            'duty_date': anchor.duty_date,
+            'time_slot': anchor.time_slot,
+            'room_no': anchor.room_no,
+        }
+        if editing_internal and editing_internal.faculty_id:
+            if not editing_internal.faculty.is_external:
+                initial['internal_faculty'] = str(editing_internal.faculty_id)
+            else:
+                initial['internal_faculty'] = 'OTHER'
+                initial['internal_faculty_other'] = editing_internal.faculty.name
+        if editing_external and editing_external.faculty_id:
+            initial['external_faculty_name'] = editing_external.faculty.name
+            initial['external_email'] = editing_external.faculty.email or ''
+        duty_form = FacultyDutyAssignmentForm(initial=initial)
+    else:
+        duty_form = FacultyDutyAssignmentForm()
     upload_form = DutyScheduleUploadForm()
     _setup_ipe_duty_form(duty_form, subjects, faculty_qs, batches)
 
@@ -1559,6 +1628,23 @@ def faculty_duty_list(request):
                     return redirect(f'{reverse("portal:faculty_duty_list")}?department={dept.pk}')
                 messages.error(request, 'Please upload a valid Excel schedule file.')
 
+        elif form_type == 'delete_duty_row' and dept:
+            deleted = 0
+            for pk in (request.POST.get('internal_pk'), request.POST.get('external_pk')):
+                if not pk:
+                    continue
+                duty = FacultyDutyAssignment.objects.filter(
+                    pk=pk, department=dept, exam_type=FacultyDutyAssignment.ExamType.IPE,
+                ).first()
+                if duty:
+                    duty.delete()
+                    deleted += 1
+            if deleted:
+                messages.success(request, 'Duty row permanently deleted from the database.')
+            else:
+                messages.error(request, 'Duty row not found.')
+            return redirect(f'{reverse("portal:faculty_duty_list")}?department={dept.pk}')
+
         elif form_type == 'assign_duty':
             if not dept:
                 messages.error(request, 'Select a department first.')
@@ -1581,7 +1667,14 @@ def faculty_duty_list(request):
                         dept,
                         duty_form.cleaned_data['external_faculty_name'],
                         is_external=True,
+                        email=duty_form.cleaned_data.get('external_email') or '',
                     )
+                    edit_anchor = request.POST.get('edit_pk')
+                    if edit_anchor:
+                        old_internal, old_external = _find_ipe_duty_pair(dept, edit_anchor)
+                        for old in (old_internal, old_external):
+                            if old:
+                                old.delete()
                     common = {
                         'department': dept,
                         'subject': duty_form.cleaned_data['subject'],
@@ -1599,6 +1692,8 @@ def faculty_duty_list(request):
                             (internal_faculty, FacultyDutyAssignment.DutyRole.INTERNAL),
                             (external_faculty, FacultyDutyAssignment.DutyRole.EXTERNAL),
                         ):
+                            if not faculty:
+                                continue
                             duty, _ = FacultyDutyAssignment.objects.update_or_create(
                                 faculty=faculty,
                                 department=dept,
@@ -1615,36 +1710,56 @@ def faculty_duty_list(request):
                                 },
                             )
                             created_names.append(f'{faculty.name} ({duty.get_duty_role_display()})')
+                        action = 'updated' if edit_anchor else 'assigned'
                         messages.success(
                             request,
-                            f'IPE duties assigned for {common["batch"]}: {", ".join(created_names)}.',
+                            f'IPE duties {action} for {common["batch"]}: {", ".join(created_names)}.',
                         )
                     except IntegrityError:
                         messages.error(request, 'This duty assignment already exists for that date.')
                     return redirect(f'{reverse("portal:faculty_duty_list")}?department={dept.pk}')
                 messages.error(request, 'Please fix duty assignment errors.')
 
+        elif form_type == 'save_external_email' and dept:
+            from .duty_email import normalize_external_username
+            fac = Faculty.objects.filter(pk=request.POST.get('faculty_id'), department=dept, is_external=True).first()
+            email_addr = normalize_external_username(request.POST.get('email'))
+            if not fac:
+                messages.error(request, 'Examiner not found.')
+            elif not email_addr or '@' not in email_addr:
+                messages.error(request, 'Enter a valid email address.')
+            else:
+                fac.email = email_addr
+                fac.save(update_fields=['email'])
+                messages.success(request, f'Email saved for {fac.name}. Username will be this email when you generate login.')
+            return redirect(f'{reverse("portal:faculty_duty_list")}?department={dept.pk}')
+
         elif form_type == 'generate_external_credentials' and dept:
             creds = []
+            skipped = []
             for fac in external_without_login:
-                username = fac.mentor_code or f'ext_{fac.pk}'
-                password = Faculty.generate_password()
-                user = User.objects.create_user(
-                    username=username, password=password,
-                    role=User.Role.FACULTY, first_name=fac.name,
+                row, err = _create_external_faculty_login(
+                    fac, request.user, role_label='External Examiner',
                 )
-                fac.user = user
-                fac.credentials_generated = True
-                fac.save()
-                GeneratedCredential.objects.create(
-                    user=user, plain_password=password, generated_by=request.user,
-                )
-                creds.append([user.username, password, fac.name, 'External Examiner'])
+                if row:
+                    creds.append(row)
+                elif err:
+                    skipped.append(err)
             if request.POST.get('download') == '1' and creds:
                 return export_credentials_excel(creds, 'external_examiner_credentials.xlsx')
             if creds:
-                messages.success(request, f'Generated login for {len(creds)} external examiner(s).')
-            else:
+                messages.success(
+                    request,
+                    f'Generated login for {len(creds)} external examiner(s). Username = email ID.',
+                )
+            if skipped:
+                messages.warning(
+                    request,
+                    'Skipped (add email first — username is email): '
+                    + '; '.join(skipped[:6])
+                    + ('…' if len(skipped) > 6 else ''),
+                )
+            if not creds and not skipped:
                 messages.info(request, 'All external examiners already have login credentials.')
             return redirect(f'{reverse("portal:faculty_duty_list")}?department={dept.pk}')
 
@@ -1653,8 +1768,11 @@ def faculty_duty_list(request):
         'duty_form': duty_form,
         'upload_form': upload_form,
         'external_without_login': external_without_login,
+        'external_with_login': list(_external_faculty_with_login(dept, scope='ipe')) if dept else [],
         'recent_uploads': recent_uploads,
         'last_import_summary': last_import_summary,
+        'editing': bool(editing_internal or editing_external),
+        'edit_pk': (editing_external or editing_internal).pk if (editing_external or editing_internal) else '',
         **dept_filter_context(request.user, ctx, request, dept),
     })
 
@@ -1668,13 +1786,181 @@ def faculty_duty_delete(request, pk):
         return redirect('portal:faculty_duty_list')
     dept = duty.department
     if request.method == 'POST':
-        duty.is_active = False
-        duty.save(update_fields=['is_active'])
-        messages.success(request, 'Duty assignment removed.')
+        duty.delete()  # permanent delete from database
+        messages.success(request, 'Duty permanently deleted from the database.')
     url = reverse('portal:faculty_duty_list')
     if dept:
         return redirect(f'{url}?department={dept.pk}')
     return redirect(url)
+
+
+def _duty_portal_urls(request=None):
+    """Live portal URLs for credential emails (always ljietgp.pythonanywhere.com)."""
+    from .duty_email import portal_urls
+    return portal_urls()
+
+
+def _create_external_faculty_login(fac, generated_by, role_label='External Examiner'):
+    """
+    Create faculty User with username = email.
+    Returns (credential_row_or_None, skip_reason_or_None).
+    """
+    from .duty_email import normalize_external_username
+
+    email_addr = normalize_external_username(fac.email)
+    if not email_addr or '@' not in email_addr:
+        return None, f'{fac.name}: email required (used as username)'
+    if User.objects.filter(username__iexact=email_addr).exists():
+        return None, f'{fac.name}: username/email {email_addr} already exists'
+    password = Faculty.generate_password()
+    user = User.objects.create_user(
+        username=email_addr,
+        password=password,
+        email=email_addr,
+        role=User.Role.FACULTY,
+        first_name=fac.name,
+    )
+    fac.user = user
+    fac.email = email_addr
+    fac.credentials_generated = True
+    fac.save()
+    GeneratedCredential.objects.create(
+        user=user, plain_password=password, generated_by=generated_by,
+    )
+    return [user.username, password, fac.name, role_label], None
+
+
+def _external_faculty_with_login(dept, scope='ipe'):
+    """External examiners who already have portal logins (for email credentials)."""
+    if not dept:
+        return Faculty.objects.none()
+    qs = Faculty.objects.filter(
+        department=dept, is_external=True, user__isnull=False,
+    ).select_related('user')
+    if scope == 'gp':
+        qs = qs.filter(
+            gp_external_duties__department=dept, gp_external_duties__is_active=True,
+        )
+    else:
+        qs = qs.filter(
+            duty_assignments__department=dept,
+            duty_assignments__is_active=True,
+            duty_assignments__exam_type=FacultyDutyAssignment.ExamType.IPE,
+        )
+    return qs.distinct().order_by('name')
+
+
+def _redirect_duty_page(scope, dept):
+    name = 'portal:faculty_duty_gp' if scope == 'gp' else 'portal:faculty_duty_list'
+    url = reverse(name)
+    if dept:
+        return redirect(f'{url}?department={dept.pk}')
+    return redirect(url)
+
+
+@role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
+def faculty_duty_email_credentials(request, faculty_pk):
+    """Email username/password + marks-entry link to one external examiner."""
+    from smtplib import SMTPException
+
+    from .duty_email import send_external_credentials_email
+
+    if request.method != 'POST':
+        return redirect('portal:faculty_duty_list')
+
+    ctx = get_user_context(request.user)
+    faculty = get_object_or_404(Faculty.objects.select_related('user', 'department'), pk=faculty_pk)
+    if not _department_in_scope(request.user, ctx, faculty.department):
+        messages.error(request, 'You do not have permission to email this examiner.')
+        return redirect('portal:faculty_duty_list')
+
+    scope = (request.POST.get('scope') or 'ipe').lower()
+    exam_label = 'GP' if scope == 'gp' else 'IPE'
+
+    # Optional: update email on faculty before sending
+    new_email = (request.POST.get('email') or '').strip()
+    if new_email:
+        faculty.email = new_email
+        faculty.save(update_fields=['email'])
+
+    login_url, marks_url = _duty_portal_urls(request)
+    try:
+        ok, msg = send_external_credentials_email(
+            faculty,
+            login_url=login_url,
+            marks_url=marks_url,
+            exam_label=exam_label,
+        )
+        if ok:
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+    except SMTPException as exc:
+        messages.error(request, f'Email could not be sent: {exc}')
+    except OSError as exc:
+        messages.error(request, f'Email connection failed: {exc}')
+    except Exception as exc:
+        messages.error(request, f'Email failed: {exc}')
+
+    return _redirect_duty_page(scope, faculty.department)
+
+
+@role_required(User.Role.SEMESTER_ADMIN, User.Role.DEPARTMENT_ADMIN, User.Role.SUPER_ADMIN)
+def faculty_duty_email_credentials_all(request):
+    """Email login credentials to all external examiners with logins (IPE or GP scope)."""
+    from smtplib import SMTPException
+
+    from .duty_email import send_external_credentials_email
+
+    if request.method != 'POST':
+        return redirect('portal:faculty_duty_list')
+
+    ctx = get_user_context(request.user)
+    scope = (request.POST.get('scope') or 'ipe').lower()
+    dept = resolve_department(request.user, ctx, request)
+    if not dept:
+        dept_param = request.POST.get('department_id') or request.POST.get('department')
+        if dept_param and dept_param not in ('all', ''):
+            candidate = Department.objects.filter(pk=dept_param).first()
+            if candidate and _department_in_scope(request.user, ctx, candidate):
+                dept = candidate
+    if not dept:
+        messages.error(request, 'Select a department first.')
+        return _redirect_duty_page(scope, dept)
+
+    login_url, marks_url = _duty_portal_urls(request)
+    exam_label = 'GP' if scope == 'gp' else 'IPE'
+    faculty_list = list(_external_faculty_with_login(dept, scope=scope))
+    if not faculty_list:
+        messages.info(request, f'No {exam_label} external examiners with login credentials found.')
+        return _redirect_duty_page(scope, dept)
+
+    sent = 0
+    skipped = []
+    for fac in faculty_list:
+        try:
+            ok, msg = send_external_credentials_email(
+                fac,
+                login_url=login_url,
+                marks_url=marks_url,
+                exam_label=exam_label,
+            )
+            if ok:
+                sent += 1
+            else:
+                skipped.append(f'{fac.name}: {msg}')
+        except (SMTPException, OSError, Exception) as exc:
+            skipped.append(f'{fac.name}: {exc}')
+
+    if sent:
+        messages.success(request, f'Sent login credentials to {sent} external examiner(s).')
+    if skipped:
+        messages.warning(
+            request,
+            f'Skipped {len(skipped)}: ' + '; '.join(skipped[:5])
+            + ('…' if len(skipped) > 5 else ''),
+        )
+    return _redirect_duty_page(scope, dept)
 
 
 def _setup_gp_duty_form(form, dept, faculty_qs, subject_selection=''):
@@ -1713,6 +1999,7 @@ def faculty_duty_gp(request):
             'assignments': [],
             'editing': None,
             'subject_selection': '',
+            'external_with_login': [],
             **dept_filter_context(request.user, ctx, request, dept),
         })
 
@@ -1765,32 +2052,53 @@ def faculty_duty_gp(request):
         Q(gp_external_duties__department=dept, gp_external_duties__is_active=True)
         | Q(duty_assignments__department=dept, duty_assignments__is_active=True),
     ).distinct()
+    external_with_login = list(_external_faculty_with_login(dept, scope='gp'))
+
+    if request.method == 'POST' and request.POST.get('form_type') == 'save_gp_external_email' and dept:
+        from .duty_email import normalize_external_username
+        fac = Faculty.objects.filter(pk=request.POST.get('faculty_id'), department=dept, is_external=True).first()
+        email_addr = normalize_external_username(request.POST.get('email'))
+        if not fac:
+            messages.error(request, 'Examiner not found.')
+        elif not email_addr or '@' not in email_addr:
+            messages.error(request, 'Enter a valid email address.')
+        else:
+            fac.email = email_addr
+            fac.save(update_fields=['email'])
+            messages.success(request, f'Email saved for {fac.name}. Username will be this email when you generate login.')
+        url = reverse('portal:faculty_duty_gp')
+        return redirect(f'{url}?department={dept.pk}')
 
     if request.method == 'POST' and request.POST.get('form_type') == 'generate_gp_external_credentials' and dept:
         creds = []
+        skipped = []
         gp_externals = Faculty.objects.filter(
             department=dept, is_external=True, user__isnull=True,
             gp_external_duties__department=dept, gp_external_duties__is_active=True,
         ).distinct()
         for fac in gp_externals:
-            username = fac.mentor_code or f'ext_{fac.pk}'
-            password = Faculty.generate_password()
-            user = User.objects.create_user(
-                username=username, password=password,
-                role=User.Role.FACULTY, first_name=fac.name,
+            row, err = _create_external_faculty_login(
+                fac, request.user, role_label='External Examiner (GP)',
             )
-            fac.user = user
-            fac.credentials_generated = True
-            fac.save()
-            GeneratedCredential.objects.create(
-                user=user, plain_password=password, generated_by=request.user,
-            )
-            creds.append([user.username, password, fac.name, 'External Examiner (GP)'])
+            if row:
+                creds.append(row)
+            elif err:
+                skipped.append(err)
         if request.POST.get('download') == '1' and creds:
             return export_credentials_excel(creds, 'gp_external_examiner_credentials.xlsx')
         if creds:
-            messages.success(request, f'Generated login for {len(creds)} GP external examiner(s).')
-        else:
+            messages.success(
+                request,
+                f'Generated login for {len(creds)} GP external examiner(s). Username = email ID.',
+            )
+        if skipped:
+            messages.warning(
+                request,
+                'Skipped (add email first — username is email): '
+                + '; '.join(skipped[:6])
+                + ('…' if len(skipped) > 6 else ''),
+            )
+        if not creds and not skipped:
             messages.info(request, 'All GP external examiners already have login credentials.')
         url = reverse('portal:faculty_duty_gp')
         return redirect(f'{url}?department={dept.pk}')
@@ -1871,6 +2179,7 @@ def faculty_duty_gp(request):
         'subject_selection': subject_selection,
         'subject_label': subject_label,
         'external_without_login': external_without_login,
+        'external_with_login': external_with_login,
         **dept_filter_context(request.user, ctx, request, dept),
     })
 
@@ -4185,3 +4494,47 @@ def ipe_thanks_pdf(request, pk):
         messages.error(request, 'You do not have access to this thank-you letter.')
         return redirect('portal:ipe_invitation_letter')
     return thanks_pdf_response(faculty.batch, faculty)
+
+
+@role_required(User.Role.DEPARTMENT_ADMIN, User.Role.SEMESTER_ADMIN, User.Role.SUPER_ADMIN)
+def ipe_invitation_email(request, pk):
+    """Email invitation letter PDF + subject syllabus to one external examiner."""
+    from smtplib import SMTPException
+
+    from .invitation_email import resolve_subject_syllabus, send_invitation_email
+
+    if request.method != 'POST':
+        return redirect('portal:ipe_invitation_letter')
+
+    faculty = get_object_or_404(
+        IPEInvitationFaculty.objects.select_related(
+            'batch', 'batch__department', 'batch__subject', 'batch__subject__semester',
+        ),
+        pk=pk,
+    )
+    batch = faculty.batch
+    ctx = get_user_context(request.user)
+    if (
+        request.user.role == User.Role.DEPARTMENT_ADMIN
+        and ctx.get('department')
+        and batch.department_id
+        and batch.department_id != ctx['department'].pk
+    ):
+        messages.error(request, 'You do not have access to this invitation letter.')
+        return _invitation_redirect(batch.subject, batch.department, batch)
+
+    syllabus = resolve_subject_syllabus(batch.subject, batch.department)
+    try:
+        ok, msg, _attached = send_invitation_email(batch, faculty, syllabus=syllabus)
+        if ok:
+            messages.success(request, msg)
+        else:
+            messages.error(request, msg)
+    except SMTPException as exc:
+        messages.error(request, f'Email could not be sent: {exc}')
+    except OSError as exc:
+        messages.error(request, f'Email connection failed: {exc}')
+    except Exception as exc:
+        messages.error(request, f'Email failed: {exc}')
+
+    return _invitation_redirect(batch.subject, batch.department, batch)

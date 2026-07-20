@@ -3,6 +3,27 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def _load_dotenv(path: Path) -> None:
+    """Load KEY=VALUE pairs from .env into os.environ (does not override existing)."""
+    if not path.is_file():
+        return
+    try:
+        for raw in path.read_text(encoding='utf-8').splitlines():
+            line = raw.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, _, value = line.partition('=')
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+    except OSError:
+        pass
+
+
+_load_dotenv(BASE_DIR / '.env')
+
 SECRET_KEY = os.environ.get(
     'DJANGO_SECRET_KEY',
     'django-insecure-ipe-gp-portal-dev-key-change-in-production',
@@ -91,3 +112,27 @@ LOGOUT_REDIRECT_URL = 'portal:home'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 X_FRAME_OPTIONS = 'SAMEORIGIN'
+
+# Email — send IPE invitation letters from ipeljiet@gmail.com
+# Use a Gmail App Password in DJANGO_EMAIL_HOST_PASSWORD (not the normal Gmail password).
+EMAIL_BACKEND = os.environ.get(
+    'DJANGO_EMAIL_BACKEND',
+    'django.core.mail.backends.smtp.EmailBackend',
+)
+EMAIL_HOST = os.environ.get('DJANGO_EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('DJANGO_EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('DJANGO_EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
+EMAIL_HOST_USER = os.environ.get('DJANGO_EMAIL_HOST_USER', 'ipeljiet@gmail.com')
+EMAIL_HOST_PASSWORD = os.environ.get('DJANGO_EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get(
+    'DJANGO_DEFAULT_FROM_EMAIL',
+    'LJ Institute of Engineering & Technology <ipeljiet@gmail.com>',
+)
+EMAIL_REPLY_TO = [EMAIL_HOST_USER]
+SERVER_EMAIL = EMAIL_HOST_USER
+
+# Public portal URL used in external examiner emails
+PORTAL_PUBLIC_BASE_URL = os.environ.get(
+    'DJANGO_PORTAL_PUBLIC_BASE_URL',
+    'https://ljietgp.pythonanywhere.com',
+)

@@ -182,11 +182,17 @@
 }
 
 .gp-me-table .gp-me-enroll {
-    font-size: 10pt;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 11.5pt;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #0b3d5c;
+    font-variant-numeric: tabular-nums;
     text-align: center;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.35;
 }
 
 .gp-me-table .gp-me-sr {

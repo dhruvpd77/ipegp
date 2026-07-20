@@ -1,8 +1,7 @@
 """IPE external examiner invitation letter — Excel import + PDF generation.
 
-PDF layout matches ANIRUDDHSINH KARSHANBHAI DODIYA_INVITE LETTER.docx /
-blank.docx: official LJ letterhead header+footer, centered Sub / schedule
-block, numbered terms, right-aligned date and signature.
+Invite and thanks PDFs share the LJU letterhead background (thanks_page_bg_clean).
+Invite body content matches the official invitation DOCX terms/layout.
 """
 import io
 import re
@@ -235,11 +234,11 @@ METHOD_ITEMS = [
 ]
 
 
-def _draw_letterhead(canvas, doc):
-    """Paint official blank.docx letterhead (header + footer) as full-page background."""
-    bg = _asset('page_bg_clean.jpg')
+def _draw_thanks_letterhead(canvas, doc):
+    """Paint LJU_Letterhead.docx background (shared by invite + thanks letters)."""
+    bg = _asset('thanks_page_bg_clean.jpg')
     if not bg.exists():
-        bg = _asset('page_bg.jpg')
+        bg = _asset('lh_image1.jpeg')
     if bg.exists():
         canvas.saveState()
         canvas.drawImage(
@@ -249,17 +248,21 @@ def _draw_letterhead(canvas, doc):
         canvas.restoreState()
 
 
+def _draw_letterhead(canvas, doc):
+    """Same letterhead background as thank-you letters."""
+    _draw_thanks_letterhead(canvas, doc)
+
+
 def build_invitation_pdf(batch, faculty):
     """Return PDF bytes for one faculty invitation letter (DOCX layout)."""
     buffer = io.BytesIO()
     page_w, page_h = A4
 
-    # Content frame sits in the white band between letterhead header & footer.
-    # Blank letterhead crop: header ~235/1755, footer from ~1638/1755 of page image.
-    top_margin = 38 * mm
-    bottom_margin = 28 * mm
-    left_margin = 18 * mm
-    right_margin = 18 * mm
+    # Same letterhead / margins as thanks letter (LJU_Letterhead background).
+    top_margin = 42 * mm
+    bottom_margin = 32 * mm
+    left_margin = 20 * mm
+    right_margin = 20 * mm
 
     frame = Frame(
         left_margin,
@@ -268,6 +271,10 @@ def build_invitation_pdf(batch, faculty):
         page_h - top_margin - bottom_margin,
         id='body',
         showBoundary=0,
+        leftPadding=0,
+        rightPadding=0,
+        topPadding=0,
+        bottomPadding=0,
     )
     doc = BaseDocTemplate(
         buffer,
@@ -369,20 +376,6 @@ def invitation_pdf_response(batch, faculty):
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{faculty.invite_filename}"'
     return response
-
-
-def _draw_thanks_letterhead(canvas, doc):
-    """Paint LJU_Letterhead.docx background for thank-you letters."""
-    bg = _asset('thanks_page_bg_clean.jpg')
-    if not bg.exists():
-        bg = _asset('lh_image1.jpeg')
-    if bg.exists():
-        canvas.saveState()
-        canvas.drawImage(
-            str(bg), 0, 0, width=A4[0], height=A4[1],
-            preserveAspectRatio=False, mask='auto',
-        )
-        canvas.restoreState()
 
 
 def _thanks_styles():

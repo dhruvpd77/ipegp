@@ -2,8 +2,8 @@
 {% load static %}
 {% block title %}{% if read_only %}View GP Marksheet{% else %}GP Mark Entry{% endif %} — {{ gp_duty.subject.name }} {{ gp_duty.split_display }}{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/marksheet-entry.css' %}?v=2">
-<link rel="stylesheet" href="{% static 'css/gp-marksheet-entry.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/marksheet-entry.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'css/gp-marksheet-entry.css' %}?v=3">
 {% endblock %}
 {% block content %}
 <div class="me-page gp-me-page">
@@ -166,7 +166,7 @@
                             </td>
                             {% endif %}
                             {% endfor %}
-                            <td class="gp-me-sticky-total gp-me-fill-total gp-me-total total-cell">{% if row.total != '' and row.total != None %}{{ row.total }}{% endif %}</td>
+                            <td class="gp-me-sticky-total gp-me-fill-total gp-me-total total-cell">{% if row.total == 'AB' %}AB{% elif row.total != '' and row.total != None %}{{ row.total }}{% endif %}</td>
                             {% if has_final_marks_col %}
                             <td class="gp-me-sticky-final gp-me-fill-final final-cell">&nbsp;</td>
                             {% endif %}
@@ -208,19 +208,33 @@
         var n = parseFloat(v);
         return isNaN(n) ? null : n;
     }
+    function isAbsentRemarks(v) {
+        var t = String(v || '').trim().toUpperCase();
+        return t === 'AB' || t === 'ABSENT' || t === 'A/B';
+    }
     document.querySelectorAll('tbody tr[data-student]').forEach(function(row) {
         function updateTotal() {
+            var cell = row.querySelector('.total-cell');
+            if (!cell) return;
+            var remarksInp = row.querySelector('input[name^="remarks_"]');
+            if (remarksInp && isAbsentRemarks(remarksInp.value)) {
+                cell.textContent = 'AB';
+                return;
+            }
             var sum = 0, has = false;
             row.querySelectorAll('.mark-input').forEach(function(inp) {
                 var n = parseNum(inp.value);
                 if (n !== null) { sum += n; has = true; }
             });
-            var cell = row.querySelector('.total-cell');
-            if (cell) cell.textContent = has ? sum : '';
+            cell.textContent = has ? sum : '';
         }
         row.querySelectorAll('.mark-input').forEach(function(inp) {
             if (!inp.readOnly) inp.addEventListener('input', updateTotal);
         });
+        var remarksInp = row.querySelector('input[name^="remarks_"]');
+        if (remarksInp && !remarksInp.readOnly) {
+            remarksInp.addEventListener('input', updateTotal);
+        }
         updateTotal();
     });
 })();

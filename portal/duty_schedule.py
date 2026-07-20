@@ -1,6 +1,12 @@
-"""Parse IPE duty schedule Excel and create faculty duty assignments."""
+"""Parse IPE duty schedule Excel and create faculty duty assignments.
+
+Supports the flat template columns:
+  subject | internal faculty | External Faculty Name | Batch | Duty Date | Time Slot | Email id
+
+Also keeps backward compatibility with the older multi-block DIV/TIME schedule sheets.
+"""
 import re
-from datetime import datetime
+from datetime import datetime, date
 
 import openpyxl
 from django.core.files.base import ContentFile
@@ -22,28 +28,44 @@ def department_batches(department):
     )
 
 
+def _norm(val):
     if val is None:
         return ''
+    if isinstance(val, datetime):
+        return val.strftime('%d-%m-%Y')
+    if isinstance(val, date):
+        return val.strftime('%d-%m-%Y')
     return re.sub(r'\s+', ' ', str(val).strip())
 
 
+def _norm_header(val):
+    text = _norm(val).lower()
+    text = re.sub(r'[^a-z0-9]+', ' ', text)
+    return ' '.join(text.split())
+
+
 def _parse_batch(div_val):
-    """A1(IPE) -> A1, B3(IPE) -> B3"""
+    """A1(IPE) -> A1, B3(IPE) -> B3, A1 -> A1"""
     text = _norm(div_val).upper()
     m = re.match(r'^([A-Z]\d+)', text)
     return m.group(1) if m else text.split('(')[0].strip()
 
 
 def _parse_date(val):
+    if isinstance(val, datetime):
+        return val.date()
+    if isinstance(val, date):
+        return val
     text = _norm(val)
     if not text:
         return None
-    m = re.match(r'(\d{1,2}/\d{1,2}/\d{4})', text)
-    if not m:
-        return None
-    for fmt in ('%d/%m/%Y', '%m/%d/%Y'):
+    # Prefer explicit date token when cell has extra text
+    m = re.search(r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', text)
+    token = m.group(1) if m else text
+    token = token.replace('/', '-')
+    for fmt in ('%d-%m-%Y', '%d-%m-%y', '%Y-%m-%d', '%m-%d-%Y'):
         try:
-            return datetime.strptime(m.group(1), fmt).date()
+            return datetime.strptime(token, fmt).date()
         except ValueError:
             continue
     return None
@@ -72,6 +94,9 @@ def _match_subject(department, label):
     sub = qs.filter(name__iexact=name).first()
     if sub:
         return sub
+    sub = qs.filter(code__iexact=name).first()
+    if sub:
+        return sub
     return qs.filter(name__icontains=name).first()
 
 
@@ -85,36 +110,42 @@ def _unique_mentor_code(department, base):
     return f'{code}{n}'
 
 
-def resolve_faculty(department, identifier, *, as_external=False, create_external=True):
+def resolve_faculty(department, identifier, *, as_external=False, create_external=True, email=''):
     """
     Match faculty by mentor code or name.
     External examiners reuse existing faculty login when matched.
+    Optional email is saved/updated on the faculty record.
     """
     ident = _norm(identifier)
+    email_addr = _norm(email).lower()
     if not ident:
         return None, 'empty'
 
     qs = Faculty.objects.filter(department=department)
     fac = qs.filter(mentor_code__iexact=ident).first()
-    if fac:
-        return fac, 'matched_code'
+    match_type = 'matched_code' if fac else None
 
-    fac = qs.filter(name__iexact=ident).first()
-    if fac:
-        return fac, 'matched_name'
+    if not fac:
+        fac = qs.filter(name__iexact=ident).first()
+        match_type = 'matched_name' if fac else None
 
-    if len(ident) <= 6 and ident.isupper():
+    if not fac and len(ident) <= 6 and ident.isupper():
         fac = qs.filter(mentor_code__iexact=ident).first()
-        if fac:
-            return fac, 'matched_code'
+        match_type = 'matched_code' if fac else None
 
-    parts = ident.split()
-    if len(parts) >= 2:
-        fac = qs.filter(
-            Q(name__icontains=parts[0]) & Q(name__icontains=parts[-1])
-        ).first()
-        if fac:
-            return fac, 'matched_name_partial'
+    if not fac:
+        parts = ident.split()
+        if len(parts) >= 2:
+            fac = qs.filter(
+                Q(name__icontains=parts[0]) & Q(name__icontains=parts[-1])
+            ).first()
+            match_type = 'matched_name_partial' if fac else None
+
+    if fac:
+        if email_addr and '@' in email_addr and (fac.email or '').lower() != email_addr:
+            fac.email = email_addr
+            fac.save(update_fields=['email'])
+        return fac, match_type or 'matched'
 
     if not as_external:
         return None, 'internal_not_found'
@@ -127,13 +158,98 @@ def resolve_faculty(department, identifier, *, as_external=False, create_externa
         department=department,
         name=ident.title() if ident.islower() else ident,
         mentor_code=code,
+        email=email_addr if '@' in email_addr else '',
         is_external=True,
     )
     return fac, 'created_external'
 
 
+FLAT_HEADER_ALIASES = {
+    'subject': {'subject', 'subject name', 'sub'},
+    'internal': {'internal faculty', 'internal', 'internal name', 'internal examiner'},
+    'external': {
+        'external faculty name', 'external faculty', 'external', 'external name',
+        'external examiner',
+    },
+    'batch': {'batch', 'div', 'division'},
+    'duty_date': {'duty date', 'date', 'exam date'},
+    'time_slot': {'time slot', 'time', 'slot'},
+    'email': {'email id', 'email', 'e mail', 'mail', 'external email'},
+    'room_no': {'room', 'room no', 'room number'},
+}
+
+
+def _map_flat_headers(header_row):
+    mapping = {}
+    for idx, raw in enumerate(header_row):
+        key = _norm_header(raw)
+        if not key:
+            continue
+        for field, aliases in FLAT_HEADER_ALIASES.items():
+            if key in aliases and field not in mapping:
+                mapping[field] = idx
+                break
+    return mapping
+
+
+def _find_flat_header_row(ws):
+    for r in range(1, min(12, (ws.max_row or 1) + 1)):
+        values = [ws.cell(r, c).value for c in range(1, (ws.max_column or 1) + 1)]
+        mapping = _map_flat_headers(values)
+        if 'subject' in mapping and 'batch' in mapping and (
+            'external' in mapping or 'internal' in mapping
+        ):
+            return r, mapping
+    return None, {}
+
+
+def _parse_flat_schedule(ws):
+    """Parse template: subject, internal faculty, External Faculty Name, Batch, Duty Date, Time Slot, Email id."""
+    header_row, mapping = _find_flat_header_row(ws)
+    if not header_row:
+        return [], []
+
+    rows = []
+    warnings = []
+    for r in range(header_row + 1, (ws.max_row or header_row) + 1):
+        def cell(field):
+            idx = mapping.get(field)
+            if idx is None:
+                return None
+            return ws.cell(r, idx + 1).value
+
+        subject_label = _norm(cell('subject'))
+        batch_raw = cell('batch')
+        if not subject_label and not _norm(batch_raw):
+            continue
+        if not subject_label:
+            warnings.append(f'Row {r}: missing subject')
+            continue
+        batch = _parse_batch(batch_raw)
+        if not batch:
+            warnings.append(f'Row {r}: missing batch')
+            continue
+        duty_date = _parse_date(cell('duty_date'))
+        if not duty_date:
+            warnings.append(f'Row {r}: invalid/missing duty date ({_norm(cell("duty_date"))})')
+            continue
+
+        rows.append({
+            'subject_label': subject_label,
+            'exam_type': _parse_exam_type(subject_label),
+            'duty_date': duty_date,
+            'batch': batch,
+            'time_slot': _norm(cell('time_slot')),
+            'room_no': _norm(cell('room_no')),
+            'internal': _norm(cell('internal')),
+            'external': _norm(cell('external')),
+            'email': _norm(cell('email')).lower(),
+        })
+    return rows, warnings
+
+
 def _parse_schedule_blocks(ws):
-    """Detect subject/date blocks from header rows (typically row 5-7)."""
+    """Detect subject/date blocks from header rows (legacy multi-column layout)."""
     blocks = []
     max_col = ws.max_column or 10
     col = 1
@@ -165,14 +281,10 @@ def _parse_schedule_blocks(ws):
     return blocks
 
 
-def parse_duty_schedule(file_path):
-    """Parse schedule Excel into duty row dicts (no DB writes)."""
-    wb = openpyxl.load_workbook(file_path, data_only=True)
-    ws = wb.active
+def _parse_block_schedule(ws):
     blocks = _parse_schedule_blocks(ws)
     rows = []
     warnings = []
-
     for block in blocks:
         if not block['duty_date']:
             warnings.append(f"Could not parse date for {block['subject_label']}")
@@ -184,21 +296,34 @@ def parse_duty_schedule(file_path):
             batch = _parse_batch(div)
             if not batch:
                 continue
-            time_slot = _norm(ws.cell(r, block['time_col']).value)
-            internal = _norm(ws.cell(r, block['internal_col']).value)
-            external = _norm(ws.cell(r, block['external_col']).value)
-            room = _norm(ws.cell(r, block['room_col']).value)
             rows.append({
                 'subject_label': block['subject_label'],
                 'exam_type': block['exam_type'],
                 'duty_date': block['duty_date'],
                 'batch': batch,
-                'time_slot': time_slot,
-                'room_no': room,
-                'internal': internal,
-                'external': external,
+                'time_slot': _norm(ws.cell(r, block['time_col']).value),
+                'room_no': _norm(ws.cell(r, block['room_col']).value),
+                'internal': _norm(ws.cell(r, block['internal_col']).value),
+                'external': _norm(ws.cell(r, block['external_col']).value),
+                'email': '',
             })
+    return rows, warnings
+
+
+def parse_duty_schedule(file_path):
+    """Parse schedule Excel into duty row dicts (no DB writes)."""
+    wb = openpyxl.load_workbook(file_path, data_only=True)
+    ws = wb.active
+    rows, warnings = _parse_flat_schedule(ws)
+    if not rows:
+        rows, block_warnings = _parse_block_schedule(ws)
+        warnings.extend(block_warnings)
     wb.close()
+    if not rows and not warnings:
+        warnings.append(
+            'No duty rows found. Use columns: subject, internal faculty, '
+            'External Faculty Name, Batch, Duty Date, Time Slot, Email id'
+        )
     return rows, warnings
 
 
@@ -231,11 +356,12 @@ def import_duty_schedule(department, uploaded_file, uploaded_by, replace_existin
     }
 
     if replace_existing:
+        # Permanent remove previously Excel-imported IPE duties for this department
         FacultyDutyAssignment.objects.filter(
             department=department,
+            exam_type=FacultyDutyAssignment.ExamType.IPE,
             schedule_upload__isnull=False,
-            is_active=True,
-        ).update(is_active=False)
+        ).delete()
 
     for row in rows:
         subject = _match_subject(department, row['subject_label'])
@@ -253,7 +379,11 @@ def import_duty_schedule(department, uploaded_file, uploaded_by, replace_existin
             if not identifier:
                 continue
             faculty, match_type = resolve_faculty(
-                department, identifier, as_external=as_external, create_external=as_external,
+                department,
+                identifier,
+                as_external=as_external,
+                create_external=as_external,
+                email=row.get('email', '') if as_external else '',
             )
             if not faculty:
                 summary['warnings'].append(
@@ -265,7 +395,7 @@ def import_duty_schedule(department, uploaded_file, uploaded_by, replace_existin
 
             if match_type == 'created_external':
                 summary['external_created'] += 1
-            elif as_external and match_type.startswith('matched'):
+            elif as_external and match_type and match_type.startswith('matched'):
                 summary['external_matched'] += 1
 
             defaults = {

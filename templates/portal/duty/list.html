@@ -19,9 +19,10 @@
                 <div class="alert alert-warning mb-0">Select a department to upload the duty schedule.</div>
                 {% else %}
                 <p class="small text-muted mb-3">
-                    Upload the official IPE schedule Excel (e.g. <strong>FSD-2 / PYTHON-II</strong> format with
-                    <strong>DIV, TIME, Internal, External, Room</strong> columns). Duties are created per batch for
-                    both internal and external faculty. If external matches an existing faculty code/name, the same login is used.
+                    Upload Excel with columns:
+                    <strong>subject, internal faculty, External Faculty Name, Batch, Duty Date, Time Slot, Email id</strong>
+                    (optional Room). Dates like <code>20-07-2026</code> are supported.
+                    External email is saved for login username.
                 </p>
                 <form method="post" enctype="multipart/form-data">
                     {% csrf_token %}
@@ -58,9 +59,21 @@
                 {% if external_without_login %}
                 <hr>
                 <h6 class="fw-semibold small mb-2">External Examiners — No Login Yet</h6>
-                <ul class="small mb-2">
+                <p class="small text-muted mb-2">Username will be the examiner’s <strong>email ID</strong>. Add email before generating.</p>
+                <ul class="small mb-2 list-unstyled">
                 {% for f in external_without_login %}
-                    <li>{{ f.name }} <span class="text-muted">({{ f.mentor_code }})</span></li>
+                    <li class="mb-2">
+                        <div class="fw-semibold">{{ f.name }} <span class="text-muted">({{ f.mentor_code }})</span></div>
+                        <form method="post" class="d-flex flex-wrap gap-1 align-items-center mt-1">
+                            {% csrf_token %}
+                            <input type="hidden" name="form_type" value="save_external_email">
+                            <input type="hidden" name="faculty_id" value="{{ f.pk }}">
+                            <input type="hidden" name="department_id" value="{{ department.pk }}">
+                            <input type="email" name="email" class="form-control form-control-sm" style="width:210px;"
+                                   value="{{ f.email }}" placeholder="email@example.com" required>
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">Save email</button>
+                        </form>
+                    </li>
                 {% endfor %}
                 </ul>
                 <form method="post">
@@ -71,12 +84,55 @@
                     <button type="submit" name="download" value="1" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download"></i> Generate & Download</button>
                 </form>
                 {% endif %}
+
+                {% if external_with_login %}
+                <hr>
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <h6 class="fw-semibold small mb-0">External Examiners — Email Login</h6>
+                    <form method="post" action="{% url 'portal:faculty_duty_email_credentials_all' %}"
+                          onsubmit="return confirm('Send username &amp; password to all IPE external examiners who have an email?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="scope" value="ipe">
+                        {% if department %}<input type="hidden" name="department" value="{{ department.pk }}">{% endif %}
+                        <button type="submit" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-envelope-check"></i> Email All
+                        </button>
+                    </form>
+                </div>
+                <p class="small text-muted mb-2">Sends Username (= email), Password, and links to <code>ljietgp.pythonanywhere.com</code> from <code>ipeljiet@gmail.com</code>.</p>
+                <ul class="list-group list-group-flush small mb-0">
+                {% for f in external_with_login %}
+                    <li class="list-group-item px-0 py-2">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                            <div>
+                                <div class="fw-semibold">{{ f.name }}</div>
+                                <div class="text-muted">ID: {{ f.user.username }}{% if f.email %} · {{ f.email }}{% else %} · <span class="text-warning">no email</span>{% endif %}</div>
+                            </div>
+                            <form method="post" action="{% url 'portal:faculty_duty_email_credentials' f.pk %}" class="d-flex flex-wrap gap-1 align-items-center"
+                                  onsubmit="return confirm('Send login credentials to {% if f.email %}{{ f.email }}{% else %}this examiner{% endif %}?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="scope" value="ipe">
+                                {% if not f.email %}
+                                <input type="email" name="email" class="form-control form-control-sm" style="width:180px;" placeholder="Email required" required>
+                                {% endif %}
+                                <button type="submit" class="btn btn-sm btn-outline-primary" title="Email ID &amp; password">
+                                    <i class="bi bi-envelope-at"></i> Email
+                                </button>
+                            </form>
+                        </div>
+                    </li>
+                {% endfor %}
+                </ul>
+                {% endif %}
                 {% endif %}
             </div>
         </div>
 
         <div class="portal-card form-panel">
-            <div class="portal-card-header"><i class="bi bi-plus-circle"></i> Manual Duty Assignment</div>
+            <div class="portal-card-header">
+                <i class="bi bi-{% if editing %}pencil-square{% else %}plus-circle{% endif %}"></i>
+                {% if editing %}Edit Duty Assignment{% else %}Manual Duty Assignment{% endif %}
+            </div>
             <div class="portal-card-body">
                 {% if not department %}
                 <div class="alert alert-warning mb-0">Select a department first.</div>
@@ -85,6 +141,7 @@
                     {% csrf_token %}
                     <input type="hidden" name="form_type" value="assign_duty">
                     <input type="hidden" name="exam_type" value="IPE">
+                    {% if edit_pk %}<input type="hidden" name="edit_pk" value="{{ edit_pk }}">{% endif %}
                     <div class="mb-3">
                         <label class="form-label">Subject</label>
                         {{ duty_form.subject }}
@@ -106,6 +163,12 @@
                         {% if duty_form.external_faculty_name.errors %}<div class="text-danger small">{{ duty_form.external_faculty_name.errors }}</div>{% endif %}
                     </div>
                     <div class="mb-3">
+                        <label class="form-label">Email ID (External)</label>
+                        {{ duty_form.external_email }}
+                        <div class="form-text">Used as login username for the external examiner.</div>
+                        {% if duty_form.external_email.errors %}<div class="text-danger small">{{ duty_form.external_email.errors }}</div>{% endif %}
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">Batch</label>
                         {{ duty_form.batch }}
                         {% if duty_form.batch.errors %}<div class="text-danger small">{{ duty_form.batch.errors }}</div>{% endif %}
@@ -123,7 +186,15 @@
                         <label class="form-label">Room No</label>
                         {{ duty_form.room_no }}
                     </div>
-                    <button type="submit" class="btn btn-primary-custom w-100"><i class="bi bi-check-lg"></i> Assign Duty</button>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary-custom flex-grow-1">
+                            <i class="bi bi-check-lg"></i>
+                            {% if editing %}Update Duty{% else %}Assign Duty{% endif %}
+                        </button>
+                        {% if editing %}
+                        <a href="{% url 'portal:faculty_duty_list' %}?department={{ department.pk }}" class="btn btn-outline-secondary">Cancel</a>
+                        {% endif %}
+                    </div>
                 </form>
                 {% endif %}
             </div>
@@ -132,7 +203,20 @@
 
     <div class="col-lg-7">
         <div class="portal-card">
-            <div class="portal-card-header"><i class="bi bi-list-check"></i> Assigned Duties</div>
+            <div class="portal-card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span><i class="bi bi-list-check"></i> Assigned Duties</span>
+                {% if external_with_login and department %}
+                <form method="post" action="{% url 'portal:faculty_duty_email_credentials_all' %}" class="m-0"
+                      onsubmit="return confirm('Send username &amp; password email to all IPE external examiners?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="scope" value="ipe">
+                    <input type="hidden" name="department" value="{{ department.pk }}">
+                    <button type="submit" class="btn btn-sm btn-outline-light border-0 text-white" style="background:rgba(255,255,255,0.12);">
+                        <i class="bi bi-envelope-check"></i> Email All Logins
+                    </button>
+                </form>
+                {% endif %}
+            </div>
             <div class="portal-card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-custom table-hover mb-0 table-sm">
@@ -143,50 +227,69 @@
                                 <th>Batch</th>
                                 <th>Internal Faculty</th>
                                 <th>External Faculty</th>
+                                <th>Email</th>
                                 <th>Time</th>
                                 <th>Room</th>
+                                <th class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                         {% for row in duty_rows %}
-                        <tr>
+                        <tr {% if edit_pk and row.external and edit_pk|stringformat:"s" == row.external.pk|stringformat:"s" %}class="table-primary"{% elif edit_pk and row.internal and edit_pk|stringformat:"s" == row.internal.pk|stringformat:"s" %}class="table-primary"{% endif %}>
                             <td class="text-nowrap">{{ row.duty_date|date:"d M Y" }}</td>
                             <td>
                                 <span class="badge {% if row.exam_type == 'IPE' %}badge-ipe{% else %}badge-gp{% endif %} me-1">{{ row.exam_type }}</span>
                                 {{ row.subject.name }}
                             </td>
                             <td><span class="badge bg-primary">{{ row.batch }}</span></td>
-                            <td class="small">
-                                {% if row.internal %}
-                                <div class="d-flex align-items-center justify-content-between gap-1">
-                                    <span class="fw-semibold">{{ row.internal.faculty.name }}</span>
-                                    <form method="post" action="{% url 'portal:faculty_duty_delete' row.internal.pk %}" class="d-inline" onsubmit="return confirm('Remove internal faculty from this duty?')">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1" title="Remove internal"><i class="bi bi-trash"></i></button>
-                                    </form>
-                                </div>
-                                {% else %}
-                                <span class="text-muted">—</span>
-                                {% endif %}
+                            <td class="small fw-semibold">
+                                {% if row.internal %}{{ row.internal.faculty.name }}{% else %}<span class="text-muted">—</span>{% endif %}
                             </td>
                             <td class="small">
                                 {% if row.external %}
-                                <div class="d-flex align-items-center justify-content-between gap-1">
-                                    <span class="fw-semibold">{{ row.external.faculty.name }}</span>
-                                    <form method="post" action="{% url 'portal:faculty_duty_delete' row.external.pk %}" class="d-inline" onsubmit="return confirm('Remove external faculty from this duty?')">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1" title="Remove external"><i class="bi bi-trash"></i></button>
-                                    </form>
-                                </div>
+                                <div class="fw-semibold">{{ row.external.faculty.name }}</div>
                                 {% else %}
                                 <span class="text-muted">—</span>
                                 {% endif %}
                             </td>
+                            <td class="small text-muted">
+                                {% if row.external and row.external.faculty.email %}{{ row.external.faculty.email }}{% else %}—{% endif %}
+                            </td>
                             <td class="small text-muted">{{ row.time_slot|default:"—" }}</td>
                             <td class="small">{{ row.room_no|default:"—" }}</td>
+                            <td class="text-end text-nowrap">
+                                {% with anchor=row.external|default:row.internal %}
+                                {% if anchor and department %}
+                                <a href="{% url 'portal:faculty_duty_list' %}?department={{ department.pk }}&edit={{ anchor.pk }}"
+                                   class="btn btn-sm btn-outline-primary py-0 px-2" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% if row.external and row.external.faculty.user_id %}
+                                <form method="post" action="{% url 'portal:faculty_duty_email_credentials' row.external.faculty.pk %}" class="d-inline"
+                                      onsubmit="return confirm('Email login credentials to {{ row.external.faculty.name }}?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="scope" value="ipe">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-1" title="Email login">
+                                        <i class="bi bi-envelope-at"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                                <form method="post" class="d-inline"
+                                      onsubmit="return confirm('Permanently delete this duty from the database?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="form_type" value="delete_duty_row">
+                                    {% if row.internal %}<input type="hidden" name="internal_pk" value="{{ row.internal.pk }}">{% endif %}
+                                    {% if row.external %}<input type="hidden" name="external_pk" value="{{ row.external.pk }}">{% endif %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Delete permanently">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                                {% endwith %}
+                            </td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="7" class="text-center text-muted py-4">No duties assigned yet. Upload schedule Excel or assign manually.</td></tr>
+                        <tr><td colspan="9" class="text-center text-muted py-4">No duties assigned yet. Upload schedule Excel or assign manually.</td></tr>
                         {% endfor %}
                         </tbody>
                     </table>

@@ -29,9 +29,21 @@
                 {% if external_without_login %}
                 <div class="alert alert-info py-2 small mb-3">
                     <div class="fw-semibold mb-1">External Examiners — No Login Yet</div>
-                    <ul class="mb-2">
+                    <p class="mb-2">Username will be the examiner’s <strong>email ID</strong>. Add email, then generate.</p>
+                    <ul class="mb-2 list-unstyled">
                     {% for f in external_without_login %}
-                        <li>{{ f.name }} <span class="text-muted">({{ f.mentor_code }})</span></li>
+                        <li class="mb-2">
+                            <div class="fw-semibold">{{ f.name }} <span class="text-muted">({{ f.mentor_code }})</span></div>
+                            <form method="post" class="d-flex flex-wrap gap-1 align-items-center mt-1">
+                                {% csrf_token %}
+                                <input type="hidden" name="form_type" value="save_gp_external_email">
+                                <input type="hidden" name="faculty_id" value="{{ f.pk }}">
+                                <input type="hidden" name="department" value="{{ department.pk }}">
+                                <input type="email" name="email" class="form-control form-control-sm" style="width:210px;"
+                                       value="{{ f.email }}" placeholder="email@example.com" required>
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">Save email</button>
+                            </form>
+                        </li>
                     {% endfor %}
                     </ul>
                     <form method="post" class="d-inline">
@@ -41,6 +53,45 @@
                         <button type="submit" class="btn btn-sm btn-primary-custom"><i class="bi bi-key"></i> Generate Logins</button>
                         <button type="submit" name="download" value="1" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download"></i> Generate &amp; Download</button>
                     </form>
+                </div>
+                {% endif %}
+
+                {% if external_with_login %}
+                <div class="alert alert-light border py-2 small mb-3">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                        <div class="fw-semibold mb-0">External Examiners — Email Login</div>
+                        <form method="post" action="{% url 'portal:faculty_duty_email_credentials_all' %}"
+                              onsubmit="return confirm('Send username &amp; password to all GP external examiners who have an email?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="scope" value="gp">
+                            <input type="hidden" name="department" value="{{ department.pk }}">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-envelope-check"></i> Email All
+                            </button>
+                        </form>
+                    </div>
+                    <p class="text-muted mb-2">Sends Username (= email), Password, and links to <code>ljietgp.pythonanywhere.com</code> from <code>ipeljiet@gmail.com</code>.</p>
+                    <ul class="list-unstyled mb-0">
+                    {% for f in external_with_login %}
+                        <li class="d-flex flex-wrap justify-content-between align-items-center gap-2 py-1 border-top">
+                            <div>
+                                <span class="fw-semibold">{{ f.name }}</span>
+                                <span class="text-muted"> · {{ f.user.username }}{% if f.email %} · {{ f.email }}{% else %} · <span class="text-warning">no email</span>{% endif %}</span>
+                            </div>
+                            <form method="post" action="{% url 'portal:faculty_duty_email_credentials' f.pk %}" class="d-flex flex-wrap gap-1 align-items-center"
+                                  onsubmit="return confirm('Send login credentials to {% if f.email %}{{ f.email }}{% else %}this examiner{% endif %}?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="scope" value="gp">
+                                {% if not f.email %}
+                                <input type="email" name="email" class="form-control form-control-sm" style="width:170px;" placeholder="Email required" required>
+                                {% endif %}
+                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-envelope-at"></i> Email
+                                </button>
+                            </form>
+                        </li>
+                    {% endfor %}
+                    </ul>
                 </div>
                 {% endif %}
 
@@ -109,9 +160,22 @@
 
     <div class="col-lg-7">
         <div class="portal-card">
-            <div class="portal-card-header">
-                <i class="bi bi-list-check"></i> GP Duties Assigned
-                {% if subject_label %}<span class="text-muted small ms-2">— {{ subject_label }}</span>{% endif %}
+            <div class="portal-card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span>
+                    <i class="bi bi-list-check"></i> GP Duties Assigned
+                    {% if subject_label %}<span class="text-muted small ms-2">— {{ subject_label }}</span>{% endif %}
+                </span>
+                {% if external_with_login and department %}
+                <form method="post" action="{% url 'portal:faculty_duty_email_credentials_all' %}" class="m-0"
+                      onsubmit="return confirm('Send username &amp; password email to all GP external examiners?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="scope" value="gp">
+                    <input type="hidden" name="department" value="{{ department.pk }}">
+                    <button type="submit" class="btn btn-sm btn-outline-light border-0 text-white" style="background:rgba(255,255,255,0.12);">
+                        <i class="bi bi-envelope-check"></i> Email All Logins
+                    </button>
+                </form>
+                {% endif %}
             </div>
             <div class="portal-card-body p-0">
                 <div class="table-responsive">
@@ -135,7 +199,25 @@
                                     <code class="small">{{ duty.split_display }}</code>
                                 </td>
                                 <td class="small fw-semibold">{{ duty.internal_display_name }}</td>
-                                <td class="small">{{ duty.external_faculty_name|default:"—" }}</td>
+                                <td class="small">
+                                    {% if duty.external_faculty %}
+                                    <div class="d-flex align-items-center gap-1 flex-wrap">
+                                        <span class="fw-semibold">{{ duty.external_faculty.name }}</span>
+                                        {% if duty.external_faculty.user_id %}
+                                        <form method="post" action="{% url 'portal:faculty_duty_email_credentials' duty.external_faculty.pk %}" class="d-inline"
+                                              onsubmit="return confirm('Email login credentials to {{ duty.external_faculty.name }}{% if duty.external_faculty.email %} ({{ duty.external_faculty.email }}){% endif %}?');">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="scope" value="gp">
+                                            <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-1" title="Email ID &amp; password">
+                                                <i class="bi bi-envelope-at"></i>
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                    {% else %}
+                                    {{ duty.external_faculty_name|default:"—" }}
+                                    {% endif %}
+                                </td>
                                 <td>{{ duty.room_no|default:"—" }}</td>
                                 <td class="text-end text-nowrap">
                                     <a href="{% url 'portal:faculty_duty_gp' %}?department={{ department.pk }}&edit={{ duty.pk }}&subject_selection={{ duty.subject_selection|urlencode }}"
