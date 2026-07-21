@@ -52,7 +52,6 @@ def build_invitation_email_html(batch, faculty):
     exam_time = escape(batch.exam_time or '—')
     branch = escape(batch.branch or '—')
     letter_date = escape(batch.letter_date or '—')
-    designation = escape(faculty.designation or '')
     college = escape(faculty.college_name or '')
 
     return f"""\
@@ -82,7 +81,7 @@ def build_invitation_email_html(batch, faculty):
           <tr>
             <td style="padding:28px 32px 8px 32px;">
               <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">
-                Dear <strong>{name}</strong>{', ' + designation if designation else ''},
+                Dear <strong>{name}</strong>,
               </p>
               <p style="margin:0 0 16px 0;font-size:15px;line-height:1.7;color:#374151;">
                 Greetings from <strong>L. J. Institute of Engineering &amp; Technology</strong>.

@@ -126,6 +126,21 @@ def _salutation_name(name):
     return f'Mr. {text}'
 
 
+def _semester_phrase_from_subject_line(subject_line):
+    """Build 'B.E Sem- IV' from the letter subject line (e.g. '... B.E. Semester-IV')."""
+    text = str(subject_line or '')
+    m = re.search(
+        r'(?:Semester|Sem)[\s.\-]*([IVXLC]+|\d+)',
+        text,
+        re.I,
+    )
+    if m:
+        token = m.group(1).strip()
+        sem = token.upper() if token.isalpha() else token
+        return f'B.E Sem- {sem}'
+    return 'B.E Sem- III'
+
+
 def _asset(*parts):
     return Path(settings.BASE_DIR) / 'static' / 'images' / 'invite_letter' / Path(*parts)
 
@@ -166,13 +181,15 @@ def _styles():
             'InviteTermBold', fontName=bold, fontSize=10, leading=12.5,
             alignment=TA_JUSTIFY, spaceAfter=2, leftIndent=22,
         ),
+        # Point 6 sub-items (a–g): clear indent under the parent line
         'method': ParagraphStyle(
             'InviteMethod', fontName=font, fontSize=10, leading=12.5,
-            alignment=TA_JUSTIFY, spaceAfter=1, leftIndent=18,
+            alignment=TA_JUSTIFY, spaceAfter=2,
+            leftIndent=28, firstLineIndent=0, bulletIndent=28,
         ),
         'method_hdr': ParagraphStyle(
             'InviteMethodHdr', fontName=bold, fontSize=10, leading=12.5,
-            alignment=TA_JUSTIFY, spaceAfter=2, leftIndent=4,
+            alignment=TA_JUSTIFY, spaceAfter=3, leftIndent=4,
         ),
         'sign': ParagraphStyle(
             'InviteSign', fontName=bold, fontSize=11, leading=13,
@@ -306,9 +323,10 @@ def build_invitation_pdf(batch, faculty):
 
     story.append(Paragraph(f'Sub: {_p(batch.subject_line)}', styles['sub']))
     story.append(Paragraph('Dear Sir/Madam,', styles['intro']))
+    sem_phrase = _semester_phrase_from_subject_line(batch.subject_line)
     story.append(Paragraph(
         'I am glad to appoint you as an external examiner to conduct practical examination '
-        'of B.E Sem- III as per the following schedule:',
+        f'of {_p(sem_phrase)} as per the following schedule:',
         styles['intro'],
     ))
 
@@ -326,7 +344,7 @@ def build_invitation_pdf(batch, faculty):
     story.append(Paragraph('<b>6.</b>  Method of conducting practical exam:', styles['method_hdr']))
 
     for letter, text in zip('abcdefg', METHOD_ITEMS):
-        story.append(Paragraph(f'<b>{letter}.</b>  {_p(text)}', styles['method']))
+        story.append(Paragraph(f'<b>{letter}.</b>&nbsp;&nbsp;{_p(text)}', styles['method']))
 
     # Signature block — right aligned; uses admin-saved signature when available
     sig_path, advisor_title, advisor_name = _resolve_signature(batch)
