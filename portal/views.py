@@ -1645,6 +1645,30 @@ def faculty_duty_list(request):
                 messages.error(request, 'Duty row not found.')
             return redirect(f'{reverse("portal:faculty_duty_list")}?department={dept.pk}')
 
+        elif form_type == 'delete_selected_duties' and dept:
+            deleted = 0
+            seen = set()
+            for raw in request.POST.getlist('duty_ids'):
+                for part in str(raw or '').split(','):
+                    pk = part.strip()
+                    if not pk or pk in seen:
+                        continue
+                    seen.add(pk)
+                    duty = FacultyDutyAssignment.objects.filter(
+                        pk=pk, department=dept, exam_type=FacultyDutyAssignment.ExamType.IPE,
+                    ).first()
+                    if duty:
+                        duty.delete()
+                        deleted += 1
+            if deleted:
+                messages.success(
+                    request,
+                    f'{deleted} duty record(s) permanently deleted from the database.',
+                )
+            else:
+                messages.warning(request, 'No duties selected to delete.')
+            return redirect(f'{reverse("portal:faculty_duty_list")}?department={dept.pk}')
+
         elif form_type == 'assign_duty':
             if not dept:
                 messages.error(request, 'Select a department first.')
@@ -2100,6 +2124,28 @@ def faculty_duty_gp(request):
             )
         if not creds and not skipped:
             messages.info(request, 'All GP external examiners already have login credentials.')
+        url = reverse('portal:faculty_duty_gp')
+        return redirect(f'{url}?department={dept.pk}')
+
+    if request.method == 'POST' and request.POST.get('form_type') == 'delete_selected_gp_duties' and dept:
+        deleted = 0
+        seen = set()
+        for raw in request.POST.getlist('duty_ids'):
+            pk = str(raw or '').strip()
+            if not pk or pk in seen:
+                continue
+            seen.add(pk)
+            duty = GPDutyAssignment.objects.filter(
+                pk=pk, department=dept, is_active=True,
+            ).first()
+            if duty:
+                duty.is_active = False
+                duty.save(update_fields=['is_active'])
+                deleted += 1
+        if deleted:
+            messages.success(request, f'{deleted} GP duty assignment(s) removed.')
+        else:
+            messages.warning(request, 'No GP duties selected to delete.')
         url = reverse('portal:faculty_duty_gp')
         return redirect(f'{url}?department={dept.pk}')
 

@@ -188,10 +188,19 @@ FILL_TOTAL = PatternFill('solid', fgColor='EAF1DD')
 ALIGN_C = Alignment(horizontal='center', vertical='center', wrap_text=True)
 ALIGN_L = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
+# GP marksheet Excel — readable data cells (filled hardcopy)
+GP_MS_FONT_SIZE = 13
+FONT_GP_MS_NORMAL = Font(name=FONT_NAME, size=GP_MS_FONT_SIZE, bold=False)
+FONT_GP_MS_BOLD = Font(name=FONT_NAME, size=GP_MS_FONT_SIZE, bold=True)
+ALIGN_GP_MS_CENTER = Alignment(horizontal='center', vertical='center', wrap_text=False)
+ALIGN_GP_MS_LEFT = Alignment(horizontal='left', vertical='center', wrap_text=True)
+ALIGN_GP_MS_HEADER = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
 COLUMN_FILLS = {
     'sr_no': FILL_HEAD, 'batch': FILL_HEAD, 'div': FILL_HEAD, 'group_id': FILL_HEAD,
     'enrollment_no': FILL_HEAD,
-    'name': FILL_HEAD, 'roll_no': FILL_HEAD, 'final_chit': FILL_PURPLE,
+    'name': FILL_HEAD, 'roll_no': FILL_HEAD, 'gender': FILL_HEAD,
+    'final_chit': FILL_PURPLE,
     'deduction_aim': FILL_RED, 'deduction_late': FILL_YELLOW,
     'mark': FILL_PROG, 'total': FILL_TOTAL, 'remarks': FILL_HEAD,
     'gender_diversity': FILL_HEAD, 'religion_diversity': FILL_HEAD,
@@ -225,6 +234,8 @@ def _classify_column(label8, label9):
         return 'roll_no'
     if 'gender' in low and 'diversity' in low:
         return 'gender_diversity'
+    if 'gender' in low:
+        return 'gender'
     if 'religion' in low and 'diversity' in low:
         return 'religion_diversity'
     if 'final' in low and 'mark' in low:
@@ -303,19 +314,30 @@ def _parse_gp_marksheet_schema(ws, header_row):
         })
 
     for col in range(7, meta_start):
+        label8 = ws.cell(header_row, col).value
         label_mr = ws.cell(mark_row, col).value
         label_sr = ws.cell(marks_sub_row, col).value
-        key = _classify_column('', label_mr or label_sr)
-        col_type = 'total' if key == 'total' else 'mark'
+        key = _classify_column(label8, label_mr or label_sr)
+        if key == 'gender':
+            col_type = 'gender'
+            field_name = 'gender'
+        elif key == 'total':
+            col_type = 'total'
+            field_name = f'mark_{col}'
+        else:
+            col_type = 'mark'
+            field_name = f'mark_{col}'
         columns.append({
             'col': col,
             'key': key,
-            'field_name': f'mark_{col}',
+            'field_name': field_name,
             'type': col_type,
-            'label8': '',
+            'label8': str(label8) if label8 else '',
             'label9': str(label_mr) if label_mr else '',
             'marks_sub_label': str(label_sr) if label_sr else '',
-            'max_marks': _extract_max_marks(label_sr) or _extract_max_marks(label_mr),
+            'max_marks': None if col_type == 'gender' else (
+                _extract_max_marks(label_sr) or _extract_max_marks(label_mr)
+            ),
         })
 
     for col in range(meta_start, last_col + 1):
@@ -323,7 +345,7 @@ def _parse_gp_marksheet_schema(ws, header_row):
         label_sr = ws.cell(marks_sub_row, col).value
         key = _classify_column(label8, label_sr)
         col_type = key if key in (
-            'gender_diversity', 'religion_diversity', 'case', 'final_marks',
+            'gender', 'gender_diversity', 'religion_diversity', 'case', 'final_marks',
         ) else 'mark'
         columns.append({
             'col': col,
@@ -372,7 +394,8 @@ def _parse_gp_marksheet_schema(ws, header_row):
         'mark_cols': mark_cols,
         'sum_cols': sum_cols or mark_cols,
         'total_col': total_col,
-        'gender_col': next((c['col'] for c in columns if c['key'] == 'gender_diversity'), None),
+        'gender_col': next((c['col'] for c in columns if c['key'] == 'gender'), None),
+        'gender_div_col': next((c['col'] for c in columns if c['key'] == 'gender_diversity'), None),
         'religion_col': next((c['col'] for c in columns if c['key'] == 'religion_diversity'), None),
         'case_col': next((c['col'] for c in columns if c['key'] == 'case'), None),
         'final_col': next((c['col'] for c in columns if c['key'] == 'final_marks'), None),
@@ -787,15 +810,30 @@ def _ensure_schema(template):
     needs_parse = not schema.get('columns')
     if template.exam_type == 'GP' and not schema.get('gp_format'):
         needs_parse = True
+    # Re-parse older GP schemas once so Gender (M/F) is classified correctly
+    if (
+        template.exam_type == 'GP'
+        and schema.get('columns')
+        and not schema.get('gender_column_resolved')
+    ):
+        has_gender = any(
+            (c.get('key') == 'gender' or c.get('type') == 'gender')
+            for c in schema['columns']
+        )
+        if not has_gender:
+            needs_parse = True
     if needs_parse:
         schema = parse_marksheet_template(template.template_file.path)
+        if template.exam_type == 'GP':
+            schema['gender_column_resolved'] = True
         template.schema = schema
         template.save(update_fields=['schema'])
     return schema
 
 
 def _gp_group_value(col_def, group, mem_idx, sr_no, batch_name, gid,
-                    gender_code, religion_code, case_code, student, mark_entry):
+                    gender_code, religion_code, case_code, student, mark_entry,
+                    member_gender=''):
     """Cell value for one GP marksheet data row."""
     key = col_def['key']
     ctype = col_def['type']
@@ -811,14 +849,23 @@ def _gp_group_value(col_def, group, mem_idx, sr_no, batch_name, gid,
         return str(student.enrollment_no or '')
     if key == 'name':
         return (student.name or '').strip().upper()
+    if key == 'gender' or ctype == 'gender':
+        from .gp_utils import normalize_member_gender
+        return normalize_member_gender(member_gender) or ''
     if key == 'gender_diversity':
-        return gender_code if mem_idx == 0 else None
+        from .gp_utils import gp_gender_diversity_value
+        return gp_gender_diversity_value(group, member_gender)
     if key == 'religion_diversity':
-        return religion_code if mem_idx == 0 else None
+        return religion_code
     if key == 'case':
-        return case_code if mem_idx == 0 else None
+        return case_code
     if ctype in ('mark', 'final_chit', 'deduction_aim', 'deduction_late', 'total', 'final_marks', 'remarks'):
         return _cell_value_from_mark(col_def, mark_entry)
+    # Fallback for old schemas where Gender was misclassified as mark
+    label = f"{col_def.get('label8') or ''} {col_def.get('label9') or ''}".lower()
+    if 'gender' in label and 'diversity' not in label:
+        from .gp_utils import normalize_member_gender
+        return normalize_member_gender(member_gender) or ''
     return ''
 
 
@@ -832,13 +879,16 @@ def _build_gp_marksheet_headers(ws, schema, last_col):
         col = col_def['col']
         fill = _fill_for_column(col_def)
         if col_def.get('label8'):
-            _style(ws.cell(hr, col, col_def['label8']), font=FONT_BOLD, fill=fill)
+            cell = ws.cell(hr, col, col_def['label8'])
+            _style(cell, font=FONT_GP_MS_BOLD, fill=fill, alignment=ALIGN_GP_MS_HEADER)
         if col_def.get('label9'):
             sub_fill = FILL_PROG if col_def['type'] == 'mark' else fill
-            _style(ws.cell(mr, col, col_def['label9']), font=FONT_BOLD, fill=sub_fill)
+            cell = ws.cell(mr, col, col_def['label9'])
+            _style(cell, font=FONT_GP_MS_BOLD, fill=sub_fill, alignment=ALIGN_GP_MS_HEADER)
         if col_def.get('marks_sub_label'):
             sub_fill = FILL_PROG if col_def['type'] in ('mark', 'total') else fill
-            _style(ws.cell(sr, col, col_def['marks_sub_label']), font=FONT_BOLD, fill=sub_fill)
+            cell = ws.cell(sr, col, col_def['marks_sub_label'])
+            _style(cell, font=FONT_GP_MS_BOLD, fill=sub_fill, alignment=ALIGN_GP_MS_HEADER)
 
     for m in schema.get('merges', []):
         try:
@@ -850,40 +900,93 @@ def _build_gp_marksheet_headers(ws, schema, last_col):
         cell = ws.cell(m['min_row'], m['min_col'])
         col_def = next((c for c in schema['columns'] if c['col'] == m['min_col']), None)
         if col_def:
-            _style(cell, font=FONT_BOLD, fill=_fill_for_column(col_def))
+            _style(cell, font=FONT_GP_MS_BOLD, fill=_fill_for_column(col_def), alignment=ALIGN_GP_MS_HEADER)
 
 
-# Landscape A4 GP marksheet — tuned so all ~15 columns fit one printable page.
+# Landscape A4 GP marksheet — readable widths; marks/totals must fit fully.
 GP_MARKSHEET_WIDTH_LIMITS = {
-    'sr_no': (4, 5),
-    'div': (4, 6),
-    'group_id': (8, 11),
-    'roll_no': (5, 7),
-    'enrollment_no': (13, 16),
-    'name': (24, 32),
-    'mark': (6, 9),
-    'total': (7, 9),
-    'gender_diversity': (8, 10),
-    'religion_diversity': (8, 10),
+    'sr_no': (5, 7),
+    'div': (5, 7),
+    'group_id': (9, 12),
+    'roll_no': (7, 10),
+    'enrollment_no': (14, 18),
+    'name': (26, 36),
+    'gender': (6, 8),
+    'mark': (10, 14),
+    'total': (10, 14),
+    'gender_diversity': (10, 12),
+    'religion_diversity': (10, 12),
     'case': (8, 11),
-    'final_marks': (9, 12),
+    'final_marks': (11, 15),
 }
 
 
+def _gp_marksheet_center_cols(schema):
+    """Column numbers that should be center-aligned in GP marksheet data rows."""
+    keys = {
+        'sr_no', 'div', 'group_id', 'roll_no', 'enrollment_no', 'gender',
+        'gender_diversity', 'religion_diversity', 'case', 'total', 'final_marks',
+    }
+    cols = set()
+    for col_def in schema['columns']:
+        if col_def['key'] in keys or col_def['type'] in ('mark', 'total', 'final_marks'):
+            cols.add(col_def['col'])
+    total_col = schema.get('total_col')
+    final_col = schema.get('final_col')
+    if total_col:
+        cols.add(total_col)
+    if final_col:
+        cols.add(final_col)
+    return cols
+
+
 def _autofit_gp_marksheet_columns(ws, schema, data_start, data_end):
-    """Compact landscape column widths so the whole marksheet fits one page."""
+    """Column widths for GP marksheet — fit headers and mark values fully."""
+    hr = schema['header_row']
+    mr = schema.get('mark_row', hr + 1)
+    sr = schema.get('marks_sub_row', hr + 2)
     for col_def in schema['columns']:
         col = col_def['col']
         key = col_def['key']
-        min_w, max_w = GP_MARKSHEET_WIDTH_LIMITS.get(key, (7, 10))
+        col_type = col_def.get('type', key)
+        min_w, max_w = GP_MARKSHEET_WIDTH_LIMITS.get(
+            key, GP_MARKSHEET_WIDTH_LIMITS.get(col_type, (8, 12)),
+        )
         max_len = 0
+        for label in (col_def.get('label8'), col_def.get('label9'), col_def.get('marks_sub_label')):
+            if label:
+                for part in str(label).split('\n'):
+                    max_len = max(max_len, len(part.strip()))
+        for row in (hr, mr, sr):
+            val = ws.cell(row, col).value
+            if val:
+                max_len = max(max_len, len(str(val)))
         for row in range(data_start, data_end + 1):
             val = ws.cell(row, col).value
             if val is not None and not (isinstance(val, str) and val.startswith('=')):
                 max_len = max(max_len, len(str(val)))
-        # Headers wrap (multi-line), so don't let long header labels widen the column.
-        width = min(max(max_len + 1, min_w), max_w)
+        width = min(max(max_len + 3, min_w), max_w)
         ws.column_dimensions[get_column_letter(col)].width = width
+
+
+def _polish_gp_marksheet_data_rows(ws, schema, data_start, data_end, name_col):
+    """Ensure GP data rows use larger font, center marks/meta, and minimum row height."""
+    center_cols = _gp_marksheet_center_cols(schema)
+    mark_cols = {c['col'] for c in schema['columns'] if c.get('type') == 'mark'}
+    center_cols |= mark_cols
+    min_row_h = 20
+    for row in range(data_start, data_end + 1):
+        ws.row_dimensions[row].height = max(ws.row_dimensions[row].height or 0, min_row_h)
+        for col in center_cols:
+            cell = ws.cell(row, col)
+            cell.font = FONT_GP_MS_NORMAL
+            cell.alignment = ALIGN_GP_MS_CENTER
+            if cell.value is not None and cell.value != '':
+                cell.number_format = '0' if isinstance(cell.value, (int, float)) else 'General'
+        name_cell = ws.cell(row, name_col)
+        if name_cell.value:
+            name_cell.font = FONT_GP_MS_NORMAL
+            name_cell.alignment = ALIGN_GP_MS_LEFT
 
 
 def _build_gp_marksheet_sheet(
@@ -922,8 +1025,9 @@ def _build_gp_marksheet_sheet(
     )
     from .gp_utils import (
         gp_case_code,
-        gp_gender_diversity_code,
         gp_religion_diversity_code,
+        gp_gender_diversity_value,
+        compute_gp_final_marks,
         _batch_palette,
         _read_group_id,
     )
@@ -943,9 +1047,11 @@ def _build_gp_marksheet_sheet(
     name_col = next((c['col'] for c in schema['columns'] if c['key'] == 'name'), 6)
     sum_cols = schema.get('sum_cols') or schema.get('mark_cols') or []
     total_col = schema.get('total_col')
+    final_col = schema.get('final_col')
+    # Only Group ID stays merged per group; Gender/Religion/Case are per-student rows
     group_merge_cols = {
         c['col'] for c in schema['columns']
-        if c['key'] in ('group_id', 'gender_diversity', 'religion_diversity', 'case')
+        if c['key'] == 'group_id'
     }
     div_col = next((c['col'] for c in schema['columns'] if c['key'] == 'div'), 2)
 
@@ -1026,7 +1132,6 @@ def _build_gp_marksheet_sheet(
         gid = entry.get('gid')
         if not gid:
             gid = (group_id_map or {}).get(group) or _read_group_id(group) or f'{entry_batch}_{group_idx}'
-        gender_code = gp_gender_diversity_code(group)
         religion_code = gp_religion_diversity_code(group)
         case_code = gp_case_code(group)
         start_row = data_row
@@ -1040,12 +1145,23 @@ def _build_gp_marksheet_sheet(
                 left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE,
                 bottom=THICK_SIDE if is_last else THIN_SIDE,
             )
+            mark_data = (mark_entry.mark_data if mark_entry else {}) or {}
+            mark_cols = [c for c in schema['columns'] if c['type'] == 'mark']
+            row_program_total, row_has_marks = compute_mark_entry_total(mark_cols, mark_data)
+            if not row_has_marks and mark_entry and mark_entry.marks_obtained:
+                row_program_total = float(mark_entry.marks_obtained)
+                row_has_marks = True
+            member_gender = getattr(detail, 'gender', '') or ''
+            g_div_val = gp_gender_diversity_value(group, member_gender)
 
             for col_def in schema['columns']:
                 col = col_def['col']
+                if col_def['key'] == 'final_marks':
+                    continue
                 val = _gp_group_value(
                     col_def, group, mem_idx, sr_no, entry_batch, gid,
-                    gender_code, religion_code, case_code, student, mark_entry,
+                    None, religion_code, case_code, student, mark_entry,
+                    member_gender=member_gender,
                 )
                 if val is None:
                     continue
@@ -1070,9 +1186,9 @@ def _build_gp_marksheet_sheet(
                     fill = FILL_TOTAL
                 else:
                     fill = _fill_for_column(col_def)
-                align = ALIGN_LEFT if col == name_col else ALIGN_CENTER
+                align = ALIGN_GP_MS_LEFT if col == name_col else ALIGN_GP_MS_CENTER
                 _style_cell(
-                    cell, font=FONT_GP_NORMAL, fill=fill,
+                    cell, font=FONT_GP_MS_NORMAL, fill=fill,
                     alignment=align, border_obj=row_border,
                 )
 
@@ -1083,6 +1199,8 @@ def _build_gp_marksheet_sheet(
                 )
                 if saved_total != '':
                     ws.cell(data_row, total_col).value = saved_total
+                elif row_has_marks:
+                    ws.cell(data_row, total_col).value = row_program_total
                 else:
                     first_l = get_column_letter(min(sum_cols))
                     last_l = get_column_letter(max(sum_cols))
@@ -1090,7 +1208,26 @@ def _build_gp_marksheet_sheet(
                         f'=IF(SUM({first_l}{data_row}:{last_l}{data_row})=0,"",'
                         f'SUM({first_l}{data_row}:{last_l}{data_row}))'
                     )
-                _style_cell(ws.cell(data_row, total_col), fill=FILL_TOTAL, border_obj=row_border)
+                _style_cell(
+                    ws.cell(data_row, total_col), font=FONT_GP_MS_NORMAL,
+                    fill=FILL_TOTAL, alignment=ALIGN_GP_MS_CENTER, border_obj=row_border,
+                )
+
+            if final_col:
+                if mark_entry and is_absent_remarks(mark_entry.remarks):
+                    final_val = 'AB'
+                elif row_has_marks:
+                    final_val = compute_gp_final_marks(
+                        row_program_total, case_code, g_div_val, religion_code,
+                    )
+                else:
+                    final_val = ''
+                if final_val != '':
+                    ws.cell(data_row, final_col).value = final_val
+                _style_cell(
+                    ws.cell(data_row, final_col), font=FONT_GP_MS_NORMAL,
+                    fill=FILL_TOTAL, alignment=ALIGN_GP_MS_CENTER, border_obj=row_border,
+                )
 
             sr_no += 1
             data_row += 1
@@ -1111,7 +1248,7 @@ def _build_gp_marksheet_sheet(
         for start_row, end_row, bname in batch_merge_ranges:
             ws.merge_cells(start_row=start_row, start_column=div_col, end_row=end_row, end_column=div_col)
             div_cell = ws.cell(start_row, div_col, bname)
-            _style_cell(div_cell, fill=GP_FILL_DIV, alignment=ALIGN_CENTER)
+            _style_cell(div_cell, font=FONT_GP_MS_BOLD, fill=GP_FILL_DIV, alignment=ALIGN_GP_MS_CENTER)
 
     for start_row, end_row, col in merge_ranges:
         ws.merge_cells(start_row=start_row, start_column=col, end_row=end_row, end_column=col)
@@ -1119,7 +1256,8 @@ def _build_gp_marksheet_sheet(
         merged.fill = GP_FILL_GROUP_ALT if col == next(
             (c['col'] for c in schema['columns'] if c['key'] == 'group_id'), 3,
         ) else _fill_for_column(next(c for c in schema['columns'] if c['col'] == col))
-        merged.alignment = ALIGN_CENTER
+        merged.font = FONT_GP_MS_BOLD
+        merged.alignment = ALIGN_GP_MS_CENTER
 
     for end_row in group_end_rows:
         for col in range(1, last_col + 1):
@@ -1147,9 +1285,12 @@ def _build_gp_marksheet_sheet(
     if data_end >= data_start:
         _autofit_gp_marksheet_columns(ws, schema, data_start=data_start, data_end=data_end)
         _autofit_gp_row_heights(ws, name_col, header_row=hr, data_start=data_start, data_end=data_end, notes_row=7)
-        ws.row_dimensions[hr].height = 30
-        ws.row_dimensions[schema.get('mark_row', hr + 1)].height = 26
-        ws.row_dimensions[schema.get('marks_sub_row', hr + 2)].height = 58
+        _polish_gp_marksheet_data_rows(ws, schema, data_start, data_end, name_col)
+        ws.row_dimensions[hr].height = 32
+        ws.row_dimensions[schema.get('mark_row', hr + 1)].height = 28
+        marks_sub = schema.get('marks_sub_row', hr + 2)
+        if marks_sub:
+            ws.row_dimensions[marks_sub].height = min(ws.row_dimensions[marks_sub].height or 48, 44)
 
     _apply_gp_print_setup(ws, last_col, footer_end)
 
@@ -1911,7 +2052,7 @@ def save_duty_marks(duty, post, students, user):
 
 
 GP_READONLY_COL_TYPES = (
-    'sr_no', 'div', 'batch', 'enrollment_no', 'name', 'roll_no', 'total',
+    'sr_no', 'div', 'batch', 'enrollment_no', 'name', 'roll_no', 'gender', 'total',
     'gender_diversity', 'religion_diversity', 'case', 'group_id', 'final_marks',
 )
 
@@ -1941,7 +2082,7 @@ def _gp_display_cols_for_duty(gp_duty):
     schema = template.schema or {}
     return [
         c for c in schema.get('columns', [])
-        if c['type'] in ('group_id', 'gender_diversity', 'religion_diversity', 'case')
+        if c['type'] in ('group_id', 'gender', 'gender_diversity', 'religion_diversity', 'case')
     ]
 
 
@@ -1976,7 +2117,7 @@ def _students_with_gp_meta(gp_duty):
     from .group_formation import build_batch_group_id_lookup
     from .gp_utils import (
         gp_case_code,
-        gp_gender_diversity_code,
+        gp_gender_diversity_value,
         gp_religion_diversity_code,
         _read_group_id,
     )
@@ -1988,19 +2129,26 @@ def _students_with_gp_meta(gp_duty):
     student_meta = {}
     for group_idx, group in enumerate(groups, start=1):
         gid = group_to_gid.get(group) or _read_group_id(group) or f'{gp_duty.batch}_{group_idx}'
-        meta = {
+        base_meta = {
             'group_id': gid,
-            'gender_diversity': gp_gender_diversity_code(group),
             'religion_diversity': gp_religion_diversity_code(group),
             'case': gp_case_code(group),
         }
         details = list(group.member_details.select_related('student').order_by('student__roll_no'))
         if not details:
             for m in group.members.order_by('roll_no'):
-                student_meta[m.pk] = meta
+                student_meta[m.pk] = {
+                    **base_meta,
+                    'gender_diversity': gp_gender_diversity_value(group, ''),
+                }
         else:
             for detail in details:
-                student_meta[detail.student_id] = meta
+                student_meta[detail.student_id] = {
+                    **base_meta,
+                    'gender_diversity': gp_gender_diversity_value(
+                        group, getattr(detail, 'gender', '') or '',
+                    ),
+                }
     return students, student_meta, groups
 
 
@@ -2010,8 +2158,10 @@ def _gp_group_blocks_for_duty(gp_duty, existing_marks, editable_cols, display_co
     from .gp_utils import (
         _batch_palette,
         gp_case_code,
-        gp_gender_diversity_code,
+        gp_gender_diversity_value,
         gp_religion_diversity_code,
+        compute_gp_final_marks,
+        normalize_member_gender,
         _read_group_id,
     )
     from .group_formation import build_batch_group_id_lookup
@@ -2036,7 +2186,6 @@ def _gp_group_blocks_for_duty(gp_duty, existing_marks, editable_cols, display_co
         gid = group_to_gid.get(group) or _read_group_id(group) or f'{gp_duty.batch}_{group_idx}'
         group_meta = {
             'group_id': gid,
-            'gender_diversity': _gp_meta_display(gp_gender_diversity_code(group)),
             'religion_diversity': _gp_meta_display(gp_religion_diversity_code(group)),
             'case': _gp_meta_display(gp_case_code(group)),
         }
@@ -2050,7 +2199,15 @@ def _gp_group_blocks_for_duty(gp_duty, existing_marks, editable_cols, display_co
             display_cells = []
             for col in display_cols:
                 key = col['key']
-                display_cells.append({'col': col, 'value': group_meta.get(key, '')})
+                if key == 'gender':
+                    val = normalize_member_gender(getattr(detail, 'gender', '') or '')
+                elif key == 'gender_diversity':
+                    val = _gp_meta_display(gp_gender_diversity_value(
+                        group, getattr(detail, 'gender', '') or '',
+                    ))
+                else:
+                    val = group_meta.get(key, '')
+                display_cells.append({'col': col, 'value': val})
             cells = []
             for col in editable_cols:
                 if col['type'] == 'remarks':
@@ -2064,8 +2221,19 @@ def _gp_group_blocks_for_duty(gp_duty, existing_marks, editable_cols, display_co
             remarks_val = (mark.remarks if mark else '') or ''
             if is_absent_remarks(remarks_val):
                 total_val = 'AB'
+                final_val = 'AB'
             elif not has_total:
                 total_val = ''
+                final_val = ''
+            else:
+                g_div_display = _gp_meta_display(gp_gender_diversity_value(
+                    group, getattr(detail, 'gender', '') or '',
+                ))
+                case_display = group_meta.get('case', '')
+                religion_display = group_meta.get('religion_diversity', '')
+                final_val = compute_gp_final_marks(
+                    total_val, case_display, g_div_display, religion_display,
+                )
             rows.append({
                 'student': student,
                 'student_pk': student.pk,
@@ -2073,10 +2241,17 @@ def _gp_group_blocks_for_duty(gp_duty, existing_marks, editable_cols, display_co
                 'display_cells': display_cells,
                 'cells': cells,
                 'total': total_val,
+                'final_total': final_val,
+                'case_code': group_meta.get('case', ''),
+                'gender_diversity': _gp_meta_display(gp_gender_diversity_value(
+                    group, getattr(detail, 'gender', '') or '',
+                )),
+                'religion_diversity': group_meta.get('religion_diversity', ''),
                 'sr_no': sr_no,
                 'roll_no': _gp_cell_str(student.roll_no),
                 'enrollment_no': _gp_cell_str(student.enrollment_no),
                 'display_name': _gp_display_name(student),
+                'gender': normalize_member_gender(getattr(detail, 'gender', '') or ''),
                 'is_last_in_group': mem_idx == len(details) - 1,
             })
             sr_no += 1

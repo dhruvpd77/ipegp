@@ -1,5 +1,6 @@
 """GP project helpers: template resolution, save, Excel export."""
 import io
+import math
 import re
 import uuid
 
@@ -745,28 +746,88 @@ def normalize_member_gender(gender_val):
     return _gender_export(gender_val)
 
 
-def gp_gender_diversity_code(group):
-    """
-    Marksheet Gender Diversity column:
-    0 = all boys/girls, 1 = 2 boys + 1 girl, 2 = 2 girls + 1 boy / 1 girl + 1 boy.
-    """
+def _group_member_genders(group):
+    """Return normalized M/F list for all members in a GP group."""
     details = list(group.member_details.all())
     if details:
         genders = [normalize_member_gender(d.gender) for d in details]
     else:
         genders = [normalize_member_gender(getattr(m, 'gender', '')) for m in group.members.all()]
-    genders = [g for g in genders if g]
+    return [g for g in genders if g]
+
+
+def gp_gender_diversity_value(group, member_gender):
+    """
+    Per-student Gender Diversity marksheet value (0 / 1 / 2):
+    - All male or all female in group -> 0 for everyone
+    - 2 males + 1 female -> female=2, each male=1
+    - All other mixed groups -> 1 for everyone
+    """
+    genders = _group_member_genders(group)
     if not genders:
         return ''
     male = genders.count('M')
     female = genders.count('F')
     if male == 0 or female == 0:
         return 0
+    member = normalize_member_gender(member_gender)
     if male == 2 and female == 1:
+        if member == 'F':
+            return 2
         return 1
-    if (male == 1 and female == 2) or (male == 1 and female == 1):
-        return 2
-    return 2
+    return 1
+
+
+def gp_gender_diversity_code(group):
+    """Backward-compatible group helper — returns diversity value for first member."""
+    genders = _group_member_genders(group)
+    if not genders:
+        return ''
+    first_detail = group.member_details.first()
+    if first_detail:
+        return gp_gender_diversity_value(group, first_detail.gender)
+    first_member = group.members.first()
+    if first_member:
+        return gp_gender_diversity_value(group, getattr(first_member, 'gender', ''))
+    return gp_gender_diversity_value(group, '')
+
+
+def compute_gp_final_marks(program_total, case_code, gender_div, religion_div):
+    """
+    GP Final Marks (out of 50 base + bonuses):
+      program total (sum of mark columns)
+      + ceil(5% of program total) when Case is 1
+      + gender diversity (0 / 1 / 2 per student)
+      + religion diversity (0 / 1)
+    """
+    if program_total in (None, '', 'AB'):
+        return program_total if program_total == 'AB' else ''
+    try:
+        base = float(program_total)
+    except (TypeError, ValueError):
+        return ''
+
+    bonus = 0
+    try:
+        case_num = int(case_code) if case_code not in (None, '') else None
+    except (TypeError, ValueError):
+        case_num = None
+    if case_num == 1:
+        bonus = math.ceil(base * 0.05)
+
+    try:
+        g_div = int(gender_div) if gender_div not in (None, '') else 0
+    except (TypeError, ValueError):
+        g_div = 0
+    try:
+        r_div = int(religion_div) if religion_div not in (None, '') else 0
+    except (TypeError, ValueError):
+        r_div = 0
+
+    final = base + bonus + g_div + r_div
+    if final == int(final):
+        return int(final)
+    return round(final, 2)
 
 
 def gp_religion_diversity_code(group):

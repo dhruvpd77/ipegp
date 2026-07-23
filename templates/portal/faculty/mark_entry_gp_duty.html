@@ -2,8 +2,8 @@
 {% load static %}
 {% block title %}{% if read_only %}View GP Marksheet{% else %}GP Mark Entry{% endif %} — {{ gp_duty.subject.name }} {{ gp_duty.split_display }}{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/marksheet-entry.css' %}?v=3">
-<link rel="stylesheet" href="{% static 'css/gp-marksheet-entry.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'css/marksheet-entry.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'css/gp-marksheet-entry.css' %}?v=6">
 {% endblock %}
 {% block content %}
 <div class="me-page gp-me-page">
@@ -39,7 +39,8 @@
 
 <div class="gp-me-legend">
     <span><i style="background:#FFF2CC"></i> Div / Batch</span>
-    <span><i style="background:#DDEBF7"></i> Group ID &amp; Meta</span>
+    <span><i style="background:#DDEBF7"></i> Group ID</span>
+    <span><i style="background:#FCE4D6"></i> Gender / Diversity / Case</span>
     <span><i style="background:#F2DBDB"></i> Program Marks</span>
     <span><i style="background:#EAF1DD"></i> Total / Final</span>
     <span><i style="background:#D6EAF8;border-color:#000"></i> Group shade A</span>
@@ -56,28 +57,28 @@
             <div class="gp-me-scroll">
                 <table class="gp-me-table{% if has_final_marks_col %} has-final-col{% endif %}">
                     <colgroup>
-                        <col style="width:34px">
-                        <col style="width:36px">
-                        <col style="width:48px">
+                        <col style="width:42px">
                         <col style="width:44px">
-                        <col style="width:108px">
-                        <col style="width:160px">
+                        <col style="width:62px">
+                        <col style="width:52px">
+                        <col style="width:128px">
+                        <col style="width:200px">
                         {% for col in display_cols %}
                         {% if col.key != 'group_id' %}
-                        <col style="width:52px">
+                        <col style="width:{% if col.key == 'gender' %}44px{% else %}58px{% endif %}">
                         {% endif %}
                         {% endfor %}
                         {% for block in column_layout %}
                         {% if block.kind == 'single' %}
-                        <col style="width:62px">
+                        <col style="width:84px">
                         {% else %}
                         {% for c in block.cols %}
-                        <col style="width:66px">
+                        <col style="width:88px">
                         {% endfor %}
                         {% endif %}
                         {% endfor %}
-                        <col style="width:50px">
-                        {% if has_final_marks_col %}<col style="width:58px">{% endif %}
+                        <col style="width:68px">
+                        {% if has_final_marks_col %}<col style="width:78px">{% endif %}
                     </colgroup>
                     <thead>
                         <tr>
@@ -88,12 +89,14 @@
                             <th rowspan="2" class="gp-me-sticky gp-me-sticky-5">Enrollment<br>No</th>
                             <th rowspan="2" class="text-start">Name of Student</th>
                             {% for col in display_cols %}
-                            {% if col.key == 'gender_diversity' %}
-                            <th rowspan="2">Gender<br>Div</th>
+                            {% if col.key == 'gender' %}
+                            <th rowspan="2">Gender</th>
+                            {% elif col.key == 'gender_diversity' %}
+                            <th rowspan="2">Gender<br>Diversity</th>
                             {% elif col.key == 'religion_diversity' %}
-                            <th rowspan="2">Religion<br>Div</th>
+                            <th rowspan="2">Religion<br>Diversity</th>
                             {% elif col.key == 'case' %}
-                            <th rowspan="2">Case<br>Study</th>
+                            <th rowspan="2">Case<br>1 / 2</th>
                             {% endif %}
                             {% endfor %}
                             {% for block in column_layout %}
@@ -128,7 +131,10 @@
                     {% for block in group_blocks %}
                         {% for row in block.rows %}
                         <tr data-student="{{ row.student_pk }}" class="{% if row.is_last_in_group %}gp-group-end{% endif %}"
-                            style="--gp-row-fill: #{{ block.fill_color }};">
+                            style="--gp-row-fill: #{{ block.fill_color }};"
+                            data-case="{{ row.case_code }}"
+                            data-gender-div="{{ row.gender_diversity }}"
+                            data-religion-div="{{ row.religion_diversity }}">
                             <td class="gp-me-sticky gp-me-sticky-1 gp-me-sr">{{ row.sr_no }}</td>
                             {% if forloop.first and forloop.parentloop.first %}
                             <td class="gp-me-sticky gp-me-sticky-2 gp-me-fill-div" rowspan="{{ total_students }}">{{ batch_name }}</td>
@@ -139,19 +145,9 @@
                             <td class="gp-me-sticky gp-me-sticky-4 gp-me-roll">{{ row.roll_no }}</td>
                             <td class="gp-me-sticky gp-me-sticky-5 gp-me-enroll" title="{{ row.enrollment_no }}">{{ row.enrollment_no }}</td>
                             <td class="gp-me-name" title="{{ row.display_name }}">{{ row.display_name }}</td>
-                            {% for col in display_cols %}
-                            {% if col.key == 'gender_diversity' %}
-                            {% if forloop.parentloop.first %}
-                            <td class="gp-me-fill-meta" rowspan="{{ block.rowspan }}">{{ block.meta.gender_diversity }}</td>
-                            {% endif %}
-                            {% elif col.key == 'religion_diversity' %}
-                            {% if forloop.parentloop.first %}
-                            <td class="gp-me-fill-meta" rowspan="{{ block.rowspan }}">{{ block.meta.religion_diversity }}</td>
-                            {% endif %}
-                            {% elif col.key == 'case' %}
-                            {% if forloop.parentloop.first %}
-                            <td class="gp-me-fill-meta" rowspan="{{ block.rowspan }}">{{ block.meta.case }}</td>
-                            {% endif %}
+                            {% for dcell in row.display_cells %}
+                            {% if dcell.col.key != 'group_id' %}
+                            <td class="gp-me-fill-meta{% if dcell.col.key == 'gender' %} gp-me-gender{% endif %}">{{ dcell.value }}</td>
                             {% endif %}
                             {% endfor %}
                             {% for cell in row.cells %}
@@ -168,7 +164,7 @@
                             {% endfor %}
                             <td class="gp-me-sticky-total gp-me-fill-total gp-me-total total-cell">{% if row.total == 'AB' %}AB{% elif row.total != '' and row.total != None %}{{ row.total }}{% endif %}</td>
                             {% if has_final_marks_col %}
-                            <td class="gp-me-sticky-final gp-me-fill-final final-cell">&nbsp;</td>
+                            <td class="gp-me-sticky-final gp-me-fill-final gp-me-final final-cell">{% if row.final_total == 'AB' %}AB{% elif row.final_total != '' and row.final_total != None %}{{ row.final_total }}{% endif %}</td>
                             {% endif %}
                         </tr>
                         {% endfor %}
@@ -212,13 +208,27 @@
         var t = String(v || '').trim().toUpperCase();
         return t === 'AB' || t === 'ABSENT' || t === 'A/B';
     }
+    function computeGpFinal(base, caseCode, genderDiv, religionDiv) {
+        if (base === null || isNaN(base)) return '';
+        var bonus = 0;
+        if (String(caseCode || '').trim() === '1') {
+            bonus = Math.ceil(base * 0.05);
+        }
+        var g = parseInt(genderDiv, 10);
+        var r = parseInt(religionDiv, 10);
+        if (isNaN(g)) g = 0;
+        if (isNaN(r)) r = 0;
+        return base + bonus + g + r;
+    }
     document.querySelectorAll('tbody tr[data-student]').forEach(function(row) {
-        function updateTotal() {
-            var cell = row.querySelector('.total-cell');
-            if (!cell) return;
+        function updateTotals() {
+            var totalCell = row.querySelector('.total-cell');
+            var finalCell = row.querySelector('.final-cell');
+            if (!totalCell) return;
             var remarksInp = row.querySelector('input[name^="remarks_"]');
             if (remarksInp && isAbsentRemarks(remarksInp.value)) {
-                cell.textContent = 'AB';
+                totalCell.textContent = 'AB';
+                if (finalCell) finalCell.textContent = 'AB';
                 return;
             }
             var sum = 0, has = false;
@@ -226,16 +236,29 @@
                 var n = parseNum(inp.value);
                 if (n !== null) { sum += n; has = true; }
             });
-            cell.textContent = has ? sum : '';
+            totalCell.textContent = has ? sum : '';
+            if (finalCell) {
+                if (!has) {
+                    finalCell.textContent = '';
+                } else {
+                    var finalVal = computeGpFinal(
+                        sum,
+                        row.getAttribute('data-case'),
+                        row.getAttribute('data-gender-div'),
+                        row.getAttribute('data-religion-div')
+                    );
+                    finalCell.textContent = finalVal !== '' ? finalVal : '';
+                }
+            }
         }
         row.querySelectorAll('.mark-input').forEach(function(inp) {
-            if (!inp.readOnly) inp.addEventListener('input', updateTotal);
+            if (!inp.readOnly) inp.addEventListener('input', updateTotals);
         });
         var remarksInp = row.querySelector('input[name^="remarks_"]');
         if (remarksInp && !remarksInp.readOnly) {
-            remarksInp.addEventListener('input', updateTotal);
+            remarksInp.addEventListener('input', updateTotals);
         }
-        updateTotal();
+        updateTotals();
     });
 })();
 </script>

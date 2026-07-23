@@ -1,76 +1,79 @@
-/* GP mark entry — matches official GP attendance / marksheet Excel styling */
+/* GP mark entry — clear hardcopy-style layout with larger readable type */
 
 .gp-me-page {
-    font-family: 'Times New Roman', Times, serif;
+    --gp-font: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --gp-head: #F5E6D3;
+    --gp-div: #FFF2CC;
+    --gp-group: #DDEBF7;
+    --gp-meta: #FCE4D6;
+    --gp-mark: #F8D7DA;
+    --gp-total: #E2EFDA;
+    --gp-border: #1f2937;
+    --gp-text: #111827;
+    font-family: var(--gp-font);
+    color: var(--gp-text);
 }
 
 .gp-me-scroll {
     overflow: auto;
-    max-height: calc(100vh - 280px);
-    border: 1px solid #000;
-    border-radius: 0;
+    max-height: calc(100vh - 260px);
+    border: 1px solid var(--gp-border);
+    border-radius: 8px;
     background: #fff;
-    padding: 0 10px 10px 0;
+    padding: 0 8px 8px 0;
 }
 
 .gp-me-table {
     table-layout: fixed;
     width: max-content;
     min-width: 100%;
-    margin: 0;
+    margin: 0 6px 0 0;
     border-collapse: collapse;
-    font-family: 'Times New Roman', Times, serif;
-    font-size: 10pt;
-    color: #000;
-    margin-right: 8px;
+    font-family: var(--gp-font);
+    font-size: 15px;
+    color: var(--gp-text);
 }
 
 .gp-me-table thead th {
     position: sticky;
     top: 0;
     z-index: 5;
-    background: #E2EFD9;
-    color: #000;
+    background: var(--gp-head);
+    color: var(--gp-text);
     font-weight: 700;
-    font-size: 10pt;
+    font-size: 13px;
+    letter-spacing: 0.01em;
     text-align: center;
     vertical-align: middle;
-    padding: 6px 4px;
-    border: 1px solid #000;
-    line-height: 1.2;
+    padding: 10px 6px;
+    border: 1px solid var(--gp-border);
+    line-height: 1.25;
     white-space: normal;
 }
 
 .gp-me-table thead tr.gp-me-subhead th {
-    top: 2.6rem;
-    background: #E2EFD9;
-    font-size: 9pt;
+    top: 3.1rem;
+    background: #FBE8D5;
+    font-size: 12px;
     font-weight: 700;
-    padding: 4px 3px;
-}
-
-.gp-me-table thead th .me-th-op {
-    display: inline-block;
-    margin-left: 2px;
-    font-size: 8pt;
-    font-weight: 700;
-    color: #333;
+    padding: 8px 5px;
 }
 
 .gp-me-table tbody td {
-    padding: 4px 5px;
+    padding: 10px 8px;
     vertical-align: middle;
-    border: 1px solid #000;
-    font-size: 10pt;
+    border: 1px solid var(--gp-border);
+    font-size: 15px;
+    text-align: center;
     background: var(--gp-row-fill, #fff);
 }
 
 .gp-me-table tbody tr.gp-group-end td {
-    border-bottom: 2px solid #000;
+    border-bottom: 2.5px solid var(--gp-border);
 }
 
 .gp-me-table tbody tr:hover td {
-    filter: brightness(0.97);
+    filter: brightness(0.98);
 }
 
 /* Sticky identity columns */
@@ -78,112 +81,123 @@
     position: sticky;
     z-index: 2;
     background: var(--gp-row-fill, #fff);
-    box-shadow: 2px 0 3px rgba(0, 0, 0, 0.08);
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.06);
 }
 
 .gp-me-table thead .gp-me-sticky {
     z-index: 6;
-    background: #E2EFD9;
-    box-shadow: 2px 0 3px rgba(0, 0, 0, 0.12);
+    background: var(--gp-head);
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
 }
 
 .gp-me-table thead tr.gp-me-subhead .gp-me-sticky {
-    background: #E2EFD9;
+    background: #FBE8D5;
 }
 
-.gp-me-table .gp-me-sticky-1 { left: 0; min-width: 34px; width: 34px; }
-.gp-me-table .gp-me-sticky-2 { left: 34px; min-width: 36px; width: 36px; }
-.gp-me-table .gp-me-sticky-3 { left: 70px; min-width: 48px; width: 48px; }
-.gp-me-table .gp-me-sticky-4 { left: 118px; min-width: 44px; width: 44px; }
-.gp-me-table .gp-me-sticky-5 { left: 162px; min-width: 108px; width: 108px; }
+.gp-me-table .gp-me-sticky-1 { left: 0; min-width: 42px; width: 42px; }
+.gp-me-table .gp-me-sticky-2 { left: 42px; min-width: 44px; width: 44px; }
+.gp-me-table .gp-me-sticky-3 { left: 86px; min-width: 62px; width: 62px; }
+.gp-me-table .gp-me-sticky-4 { left: 148px; min-width: 52px; width: 52px; }
+.gp-me-table .gp-me-sticky-5 { left: 200px; min-width: 128px; width: 128px; }
 
 .gp-me-table .gp-me-sticky-final {
     position: sticky;
     right: 0;
     z-index: 2;
-    background: #EAF1DD;
-    box-shadow: -2px 0 3px rgba(0, 0, 0, 0.08);
+    background: var(--gp-total);
+    box-shadow: -2px 0 4px rgba(0, 0, 0, 0.08);
     font-weight: 700;
     text-align: center;
-    min-width: 58px;
-    width: 58px;
+    min-width: 78px;
+    width: 78px;
 }
 
 .gp-me-table .gp-me-sticky-total {
     position: sticky;
-    right: 58px;
+    right: 78px;
     z-index: 2;
-    background: #EAF1DD;
-    box-shadow: -2px 0 3px rgba(0, 0, 0, 0.06);
+    background: var(--gp-total);
+    box-shadow: -2px 0 4px rgba(0, 0, 0, 0.06);
     font-weight: 700;
     text-align: center;
-    min-width: 50px;
-    width: 50px;
+    min-width: 68px;
+    width: 68px;
 }
 
 .gp-me-table thead .gp-me-sticky-final,
 .gp-me-table thead .gp-me-sticky-total {
     z-index: 6;
-    background: #E2EFD9;
+    background: var(--gp-head);
 }
 
 .gp-me-table:not(.has-final-col) .gp-me-sticky-total {
     right: 0;
 }
 
-/* GP attendance-style fills */
 .gp-me-fill-div {
-    background: #FFF2CC !important;
+    background: var(--gp-div) !important;
     font-weight: 700;
+    font-size: 14px;
     text-align: center;
     vertical-align: middle;
 }
 
 .gp-me-fill-group {
-    background: #DDEBF7 !important;
+    background: var(--gp-group) !important;
     font-weight: 700;
+    font-size: 13px;
     text-align: center;
     vertical-align: middle;
 }
 
 .gp-me-fill-meta {
-    background: #DDEBF7 !important;
+    background: var(--gp-meta) !important;
     font-weight: 700;
+    font-size: 15px;
     text-align: center;
     vertical-align: middle;
+    font-variant-numeric: tabular-nums;
+}
+
+.gp-me-gender {
+    font-size: 14px;
+    letter-spacing: 0.04em;
 }
 
 .gp-me-fill-mark {
-    background: #F2DBDB !important;
+    background: var(--gp-mark) !important;
+    text-align: center;
+    vertical-align: middle;
+    min-width: 84px;
 }
 
-.gp-me-fill-final {
-    background: #EAF1DD !important;
-}
-
+.gp-me-fill-final,
 .gp-me-fill-total {
-    background: #EAF1DD !important;
+    background: var(--gp-total) !important;
     font-weight: 700;
 }
 
 .gp-me-table .gp-me-roll {
     text-align: center;
-    font-weight: 400;
+    font-weight: 600;
+    font-size: 13px;
     font-variant-numeric: tabular-nums;
 }
 
 .gp-me-table .gp-me-name {
-    font-weight: 400;
+    font-weight: 600;
+    font-size: 14px;
     text-transform: uppercase;
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    letter-spacing: 0.01em;
 }
 
 .gp-me-table .gp-me-enroll {
-    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    font-size: 11.5pt;
+    font-family: var(--gp-font);
+    font-size: 13px;
     font-weight: 700;
     letter-spacing: 0.02em;
     color: #0b3d5c;
@@ -197,70 +211,88 @@
 
 .gp-me-table .gp-me-sr {
     text-align: center;
-    font-size: 10pt;
+    font-size: 13px;
+    font-weight: 600;
 }
 
-.gp-me-table .gp-me-total {
-    font-size: 10pt;
+.gp-me-table .gp-me-total,
+.gp-me-table .gp-me-final {
+    font-size: 16px;
     font-weight: 700;
     text-align: center;
-    min-height: 1.4rem;
+    vertical-align: middle;
+    min-height: 1.85rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.gp-me-table .gp-me-final {
+    color: #0b3d5c;
 }
 
 .gp-me-table .gp-me-input {
     display: block;
     width: 100%;
     max-width: 100%;
-    margin: 0;
-    padding: 2px 1px;
-    font-family: 'Times New Roman', Times, serif;
-    font-size: 10pt;
-    font-weight: 400;
+    min-height: 38px;
+    margin: 0 auto;
+    padding: 8px 6px;
+    font-family: var(--gp-font);
+    font-size: 16px;
+    font-weight: 600;
     text-align: center;
-    color: #000;
-    background: transparent;
+    color: var(--gp-text);
+    background: rgba(255, 255, 255, 0.72);
     border: none;
-    border-radius: 0;
-    box-shadow: inset 0 0 0 1px #888;
+    border-radius: 4px;
+    box-shadow: inset 0 0 0 1px #9ca3af;
+    font-variant-numeric: tabular-nums;
 }
 
 .gp-me-table .gp-me-input:focus {
     outline: none;
-    box-shadow: inset 0 0 0 1px #000;
+    box-shadow: inset 0 0 0 2px #0b3d5c;
     background: #fff;
 }
 
 .gp-me-table .gp-me-input::placeholder {
-    color: #888;
-    font-size: 8pt;
+    color: #9ca3af;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.gp-me-table .gp-me-input[readonly] {
+    background: transparent;
+    box-shadow: none;
+    cursor: default;
 }
 
 .gp-me-actions .gp-me-count {
     margin-left: auto;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     color: var(--text-muted);
 }
 
 .gp-me-legend {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem 1.25rem;
-    margin-bottom: 0.75rem;
-    font-family: 'Times New Roman', Times, serif;
-    font-size: 9pt;
-    color: #333;
+    gap: 0.55rem 1.35rem;
+    margin-bottom: 0.85rem;
+    font-family: var(--gp-font);
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #374151;
 }
 
 .gp-me-legend span {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.4rem;
 }
 
 .gp-me-legend i {
     display: inline-block;
-    width: 14px;
-    height: 14px;
-    border: 1px solid #000;
-    border-radius: 0;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--gp-border);
+    border-radius: 3px;
 }

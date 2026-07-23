@@ -205,23 +205,44 @@
         <div class="portal-card">
             <div class="portal-card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                 <span><i class="bi bi-list-check"></i> Assigned Duties</span>
-                {% if external_with_login and department %}
-                <form method="post" action="{% url 'portal:faculty_duty_email_credentials_all' %}" class="m-0"
-                      onsubmit="return confirm('Send username &amp; password email to all IPE external examiners?');">
-                    {% csrf_token %}
-                    <input type="hidden" name="scope" value="ipe">
-                    <input type="hidden" name="department" value="{{ department.pk }}">
-                    <button type="submit" class="btn btn-sm btn-outline-light border-0 text-white" style="background:rgba(255,255,255,0.12);">
-                        <i class="bi bi-envelope-check"></i> Email All Logins
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    {% if duty_rows %}
+                    <button type="submit" form="bulkDeleteDutiesForm" id="bulkDeleteDutiesBtn"
+                            class="btn btn-sm btn-outline-danger border-0"
+                            style="background:rgba(220,53,69,0.9);color:#fff;"
+                            disabled
+                            onclick="return confirmBulkDutyDelete();">
+                        <i class="bi bi-trash"></i> Delete Selected
                     </button>
-                </form>
-                {% endif %}
+                    {% endif %}
+                    {% if external_with_login and department %}
+                    <form method="post" action="{% url 'portal:faculty_duty_email_credentials_all' %}" class="m-0"
+                          onsubmit="return confirm('Send username &amp; password email to all IPE external examiners?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="scope" value="ipe">
+                        <input type="hidden" name="department" value="{{ department.pk }}">
+                        <button type="submit" class="btn btn-sm btn-outline-light border-0 text-white" style="background:rgba(255,255,255,0.12);">
+                            <i class="bi bi-envelope-check"></i> Email All Logins
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
             </div>
             <div class="portal-card-body p-0">
+                <form method="post" id="bulkDeleteDutiesForm" class="d-none">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="delete_selected_duties">
+                    {% if department %}<input type="hidden" name="department_id" value="{{ department.pk }}">{% endif %}
+                </form>
                 <div class="table-responsive">
                     <table class="table table-custom table-hover mb-0 table-sm">
                         <thead>
                             <tr>
+                                <th style="width:36px;" class="text-center">
+                                    {% if duty_rows %}
+                                    <input type="checkbox" id="selectAllDuties" class="form-check-input" title="Select all">
+                                    {% endif %}
+                                </th>
                                 <th>Date</th>
                                 <th>Subject</th>
                                 <th>Batch</th>
@@ -236,6 +257,16 @@
                         <tbody>
                         {% for row in duty_rows %}
                         <tr {% if edit_pk and row.external and edit_pk|stringformat:"s" == row.external.pk|stringformat:"s" %}class="table-primary"{% elif edit_pk and row.internal and edit_pk|stringformat:"s" == row.internal.pk|stringformat:"s" %}class="table-primary"{% endif %}>
+                            <td class="text-center">
+                                {% with anchor=row.external|default:row.internal %}
+                                {% if anchor %}
+                                <input type="checkbox" class="form-check-input duty-row-check" name="duty_ids"
+                                       form="bulkDeleteDutiesForm"
+                                       value="{% if row.internal %}{{ row.internal.pk }}{% endif %},{% if row.external %}{{ row.external.pk }}{% endif %}"
+                                       title="Select duty">
+                                {% endif %}
+                                {% endwith %}
+                            </td>
                             <td class="text-nowrap">{{ row.duty_date|date:"d M Y" }}</td>
                             <td>
                                 <span class="badge {% if row.exam_type == 'IPE' %}badge-ipe{% else %}badge-gp{% endif %} me-1">{{ row.exam_type }}</span>
@@ -289,7 +320,7 @@
                             </td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="9" class="text-center text-muted py-4">No duties assigned yet. Upload schedule Excel or assign manually.</td></tr>
+                        <tr><td colspan="10" class="text-center text-muted py-4">No duties assigned yet. Upload schedule Excel or assign manually.</td></tr>
                         {% endfor %}
                         </tbody>
                     </table>
@@ -331,6 +362,39 @@
     }
     forceUpper(otherInput);
     forceUpper(externalInput);
+
+    const selectAll = document.getElementById('selectAllDuties');
+    const rowChecks = Array.from(document.querySelectorAll('.duty-row-check'));
+    const deleteBtn = document.getElementById('bulkDeleteDutiesBtn');
+
+    function syncBulkDeleteState() {
+        const selected = rowChecks.filter(function (cb) { return cb.checked; }).length;
+        if (deleteBtn) deleteBtn.disabled = selected === 0;
+        if (selectAll) {
+            selectAll.checked = rowChecks.length > 0 && selected === rowChecks.length;
+            selectAll.indeterminate = selected > 0 && selected < rowChecks.length;
+        }
+    }
+
+    window.confirmBulkDutyDelete = function () {
+        const selected = rowChecks.filter(function (cb) { return cb.checked; }).length;
+        if (!selected) {
+            alert('Select at least one duty to delete.');
+            return false;
+        }
+        return confirm('Permanently delete ' + selected + ' selected duty row(s) from the database?');
+    };
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            rowChecks.forEach(function (cb) { cb.checked = selectAll.checked; });
+            syncBulkDeleteState();
+        });
+    }
+    rowChecks.forEach(function (cb) {
+        cb.addEventListener('change', syncBulkDeleteState);
+    });
+    syncBulkDeleteState();
 })();
 </script>
 {% endblock %}

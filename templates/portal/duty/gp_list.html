@@ -165,23 +165,44 @@
                     <i class="bi bi-list-check"></i> GP Duties Assigned
                     {% if subject_label %}<span class="text-muted small ms-2">— {{ subject_label }}</span>{% endif %}
                 </span>
-                {% if external_with_login and department %}
-                <form method="post" action="{% url 'portal:faculty_duty_email_credentials_all' %}" class="m-0"
-                      onsubmit="return confirm('Send username &amp; password email to all GP external examiners?');">
-                    {% csrf_token %}
-                    <input type="hidden" name="scope" value="gp">
-                    <input type="hidden" name="department" value="{{ department.pk }}">
-                    <button type="submit" class="btn btn-sm btn-outline-light border-0 text-white" style="background:rgba(255,255,255,0.12);">
-                        <i class="bi bi-envelope-check"></i> Email All Logins
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    {% if assignments %}
+                    <button type="submit" form="bulkDeleteGpDutiesForm" id="bulkDeleteGpDutiesBtn"
+                            class="btn btn-sm btn-outline-danger border-0"
+                            style="background:rgba(220,53,69,0.9);color:#fff;"
+                            disabled
+                            onclick="return confirmBulkGpDutyDelete();">
+                        <i class="bi bi-trash"></i> Delete Selected
                     </button>
-                </form>
-                {% endif %}
+                    {% endif %}
+                    {% if external_with_login and department %}
+                    <form method="post" action="{% url 'portal:faculty_duty_email_credentials_all' %}" class="m-0"
+                          onsubmit="return confirm('Send username &amp; password email to all GP external examiners?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="scope" value="gp">
+                        <input type="hidden" name="department" value="{{ department.pk }}">
+                        <button type="submit" class="btn btn-sm btn-outline-light border-0 text-white" style="background:rgba(255,255,255,0.12);">
+                            <i class="bi bi-envelope-check"></i> Email All Logins
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
             </div>
             <div class="portal-card-body p-0">
+                <form method="post" id="bulkDeleteGpDutiesForm" class="d-none">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="delete_selected_gp_duties">
+                    {% if department %}<input type="hidden" name="department" value="{{ department.pk }}">{% endif %}
+                </form>
                 <div class="table-responsive">
                     <table class="table table-custom table-hover mb-0 table-sm">
                         <thead>
                             <tr>
+                                <th style="width:36px;" class="text-center">
+                                    {% if assignments %}
+                                    <input type="checkbox" id="selectAllGpDuties" class="form-check-input" title="Select all">
+                                    {% endif %}
+                                </th>
                                 <th>Date</th>
                                 <th>Split / Groups</th>
                                 <th>Internal</th>
@@ -193,6 +214,12 @@
                         <tbody>
                         {% for duty in assignments %}
                             <tr {% if editing and editing.pk == duty.pk %}class="table-primary"{% endif %}>
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input gp-duty-row-check" name="duty_ids"
+                                           form="bulkDeleteGpDutiesForm"
+                                           value="{{ duty.pk }}"
+                                           title="Select duty">
+                                </td>
                                 <td class="text-nowrap">{{ duty.duty_date|date:"d M Y" }}</td>
                                 <td>
                                     <span class="badge badge-gp me-1">GP</span>
@@ -235,7 +262,7 @@
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">
+                                <td colspan="7" class="text-center text-muted py-4">
                                     No GP duty assignments yet. Use the form to assign duties.
                                 </td>
                             </tr>
@@ -292,6 +319,39 @@
             this.setSelectionRange(start, end);
         });
     }
+
+    const selectAll = document.getElementById('selectAllGpDuties');
+    const rowChecks = Array.from(document.querySelectorAll('.gp-duty-row-check'));
+    const deleteBtn = document.getElementById('bulkDeleteGpDutiesBtn');
+
+    function syncBulkDeleteState() {
+        const selected = rowChecks.filter(function (cb) { return cb.checked; }).length;
+        if (deleteBtn) deleteBtn.disabled = selected === 0;
+        if (selectAll) {
+            selectAll.checked = rowChecks.length > 0 && selected === rowChecks.length;
+            selectAll.indeterminate = selected > 0 && selected < rowChecks.length;
+        }
+    }
+
+    window.confirmBulkGpDutyDelete = function () {
+        const selected = rowChecks.filter(function (cb) { return cb.checked; }).length;
+        if (!selected) {
+            alert('Select at least one GP duty to delete.');
+            return false;
+        }
+        return confirm('Remove ' + selected + ' selected GP duty assignment(s)?');
+    };
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            rowChecks.forEach(function (cb) { cb.checked = selectAll.checked; });
+            syncBulkDeleteState();
+        });
+    }
+    rowChecks.forEach(function (cb) {
+        cb.addEventListener('change', syncBulkDeleteState);
+    });
+    syncBulkDeleteState();
 })();
 </script>
 {% endblock %}

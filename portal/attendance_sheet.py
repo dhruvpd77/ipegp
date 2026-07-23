@@ -208,13 +208,98 @@ def _autofit_gp_row_heights(ws, name_col, header_row, data_start, data_end, note
         )
 
 
+# Landscape A4 — printable area in points (after ~0.4" side / 0.5" top-bottom margins).
+LANDSCAPE_A4_PRINTABLE_W_PT = 812
+LANDSCAPE_A4_PRINTABLE_H_PT = 559
+EXCEL_COL_WIDTH_TO_PT = 7.0
+GP_PRINT_MIN_SCALE = 10
+
+
+def _sheet_content_width_pt(ws, last_col):
+    total = 0.0
+    for col in range(1, last_col + 1):
+        total += (ws.column_dimensions[get_column_letter(col)].width or 8.43) * EXCEL_COL_WIDTH_TO_PT
+    return total
+
+
+def _sheet_content_height_pt(ws, last_row):
+    return sum(ws.row_dimensions[r].height or 15 for r in range(1, last_row + 1))
+
+
+def _calc_landscape_print_scale(ws, last_col, last_row):
+    """Uniform scale % so all columns and rows fit on one landscape A4 page."""
+    width_pt = _sheet_content_width_pt(ws, last_col)
+    height_pt = _sheet_content_height_pt(ws, last_row)
+    if width_pt <= 0 or height_pt <= 0:
+        return 100
+    scale_w = LANDSCAPE_A4_PRINTABLE_W_PT / width_pt * 100
+    scale_h = LANDSCAPE_A4_PRINTABLE_H_PT / height_pt * 100
+    return max(GP_PRINT_MIN_SCALE, min(int(min(scale_w, scale_h)), 100))
+
+
+def _compact_gp_sheet_for_landscape_print(ws, last_col, last_row):
+    """
+    Shrink oversized headers, rows, and columns so the sheet can fit on one
+    landscape A4 page even at the minimum print scale.
+    """
+    max_w = LANDSCAPE_A4_PRINTABLE_W_PT / (GP_PRINT_MIN_SCALE / 100)
+    max_h = LANDSCAPE_A4_PRINTABLE_H_PT / (GP_PRINT_MIN_SCALE / 100)
+
+    for row in range(1, min(last_row, 12) + 1):
+        height = ws.row_dimensions[row].height or 15
+        if height > 40:
+            ws.row_dimensions[row].height = 40
+
+    width_pt = _sheet_content_width_pt(ws, last_col)
+    if width_pt > max_w:
+        ratio = max_w / width_pt
+        for col in range(1, last_col + 1):
+            letter = get_column_letter(col)
+            current = ws.column_dimensions[letter].width or 8.43
+            ws.column_dimensions[letter].width = max(current * ratio, 4.5)
+
+    height_pt = _sheet_content_height_pt(ws, last_row)
+    if height_pt > max_h:
+        ratio = max_h / height_pt
+        for row in range(1, last_row + 1):
+            current = ws.row_dimensions[row].height or 15
+            floor = 12 if row <= 8 else 11
+            ws.row_dimensions[row].height = max(current * ratio, floor)
+
+
+def _apply_landscape_print_setup(ws, last_col, last_row):
+    """Landscape A4 — entire sheet on one page using explicit print scale."""
+    from openpyxl.worksheet.page import PageMargins
+
+    _compact_gp_sheet_for_landscape_print(ws, last_col, last_row)
+    scale = _calc_landscape_print_scale(ws, last_col, last_row)
+
+    last_letter = get_column_letter(last_col)
+    ws.print_area = f'A1:{last_letter}{last_row}'
+    ws.page_setup.orientation = 'landscape'
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.sheet_properties.pageSetUpPr.fitToPage = False
+    ws.page_setup.scale = scale
+    ws.page_setup.fitToWidth = None
+    ws.page_setup.fitToHeight = None
+    ws.page_margins = PageMargins(
+        left=0.2, right=0.2, top=0.25, bottom=0.25, header=0.1, footer=0.1,
+    )
+    ws.print_options.horizontalCentered = True
+    ws.print_options.verticalCentered = False
+
+
 def _apply_print_setup(ws, last_col, last_row, landscape=True):
     """A4 print — fit entire sheet to one page for hard-copy printing."""
+    if landscape:
+        _apply_landscape_print_setup(ws, last_col, last_row)
+        return
+
     from openpyxl.worksheet.page import PageMargins
 
     last_letter = get_column_letter(last_col)
     ws.print_area = f'A1:{last_letter}{last_row}'
-    ws.page_setup.orientation = 'landscape' if landscape else 'portrait'
+    ws.page_setup.orientation = 'portrait'
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
