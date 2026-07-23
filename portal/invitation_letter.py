@@ -146,59 +146,59 @@ def _asset(*parts):
 
 
 def _styles():
-    """Compact styles so the full invitation fits on one A4 page with letterhead."""
+    """Invitation styles sized to fill one A4 page under the LJU letterhead."""
     font = 'Times-Roman'
     bold = 'Times-Bold'
     return {
         'date': ParagraphStyle(
-            'InviteDate', fontName=bold, fontSize=10, leading=11.5,
-            alignment=TA_RIGHT, spaceAfter=3,
+            'InviteDate', fontName=bold, fontSize=11, leading=13,
+            alignment=TA_RIGHT, spaceAfter=5,
         ),
         'to_line': ParagraphStyle(
-            'InviteTo', fontName=bold, fontSize=10, leading=11.5,
+            'InviteTo', fontName=bold, fontSize=11, leading=13,
             alignment=TA_LEFT, spaceAfter=0,
         ),
         'name': ParagraphStyle(
-            'InviteName', fontName=bold, fontSize=10, leading=11.5,
+            'InviteName', fontName=bold, fontSize=11, leading=13,
             alignment=TA_LEFT, spaceAfter=0,
         ),
         'sub': ParagraphStyle(
-            'InviteSub', fontName=bold, fontSize=10, leading=11.5,
-            alignment=TA_CENTER, spaceBefore=4, spaceAfter=3,
+            'InviteSub', fontName=bold, fontSize=11, leading=13,
+            alignment=TA_CENTER, spaceBefore=7, spaceAfter=5,
         ),
         'intro': ParagraphStyle(
-            'InviteIntro', fontName=font, fontSize=9.5, leading=11.5,
-            alignment=TA_LEFT, spaceAfter=3,
+            'InviteIntro', fontName=font, fontSize=10.5, leading=13,
+            alignment=TA_JUSTIFY, spaceAfter=5,
         ),
         'detail': ParagraphStyle(
-            'InviteDetail', fontName=bold, fontSize=10, leading=11.5,
-            alignment=TA_CENTER, spaceAfter=0.5,
+            'InviteDetail', fontName=bold, fontSize=11, leading=13,
+            alignment=TA_CENTER, spaceAfter=1,
         ),
         'term': ParagraphStyle(
-            'InviteTerm', fontName=font, fontSize=9, leading=10.8,
-            alignment=TA_JUSTIFY, spaceAfter=1, leftIndent=3, firstLineIndent=0,
+            'InviteTerm', fontName=font, fontSize=9.5, leading=11.8,
+            alignment=TA_JUSTIFY, spaceAfter=2, leftIndent=3, firstLineIndent=0,
         ),
         'term_bold': ParagraphStyle(
-            'InviteTermBold', fontName=bold, fontSize=9, leading=10.8,
-            alignment=TA_JUSTIFY, spaceAfter=1, leftIndent=18,
+            'InviteTermBold', fontName=bold, fontSize=9.5, leading=11.8,
+            alignment=TA_JUSTIFY, spaceAfter=2, leftIndent=18,
         ),
         # Point 6 sub-items (a–g): clear indent under the parent line
         'method': ParagraphStyle(
-            'InviteMethod', fontName=font, fontSize=9, leading=10.8,
-            alignment=TA_JUSTIFY, spaceAfter=1,
+            'InviteMethod', fontName=font, fontSize=9.5, leading=11.8,
+            alignment=TA_JUSTIFY, spaceAfter=2,
             leftIndent=22, firstLineIndent=0, bulletIndent=22,
         ),
         'method_hdr': ParagraphStyle(
-            'InviteMethodHdr', fontName=bold, fontSize=9, leading=10.8,
-            alignment=TA_JUSTIFY, spaceAfter=1.5, leftIndent=3,
+            'InviteMethodHdr', fontName=bold, fontSize=9.5, leading=11.8,
+            alignment=TA_JUSTIFY, spaceAfter=2.5, leftIndent=3,
         ),
         'sign': ParagraphStyle(
-            'InviteSign', fontName=bold, fontSize=10, leading=11.5,
+            'InviteSign', fontName=bold, fontSize=11, leading=13,
             alignment=TA_RIGHT, spaceAfter=0,
         ),
         'sign_for': ParagraphStyle(
-            'InviteFor', fontName=bold, fontSize=10, leading=11.5,
-            alignment=TA_RIGHT, spaceBefore=3, spaceAfter=0,
+            'InviteFor', fontName=bold, fontSize=11, leading=13,
+            alignment=TA_RIGHT, spaceBefore=5, spaceAfter=1,
         ),
     }
 
@@ -273,20 +273,24 @@ def _draw_letterhead(canvas, doc):
 
 def build_invitation_pdf(batch, faculty):
     """Return PDF bytes for one faculty invitation letter (DOCX layout)."""
+    from reportlab.platypus.flowables import _listWrapOn
+
     buffer = io.BytesIO()
     page_w, page_h = A4
 
-    # Compact margins so body clears letterhead header/footer and stays on 1 page.
-    top_margin = 38 * mm
-    bottom_margin = 26 * mm
-    left_margin = 18 * mm
-    right_margin = 18 * mm
+    # Match letterhead: clear header crest and blue footer band.
+    top_margin = 42 * mm
+    bottom_margin = 32 * mm
+    left_margin = 20 * mm
+    right_margin = 20 * mm
+    frame_w = page_w - left_margin - right_margin
+    frame_h = page_h - top_margin - bottom_margin
 
     frame = Frame(
         left_margin,
         bottom_margin,
-        page_w - left_margin - right_margin,
-        page_h - top_margin - bottom_margin,
+        frame_w,
+        frame_h,
         id='body',
         showBoundary=0,
         leftPadding=0,
@@ -308,58 +312,65 @@ def build_invitation_pdf(batch, faculty):
     ])
 
     styles = _styles()
-    story = []
+    body = []
 
-    story.append(Paragraph(f'Date: {_p(batch.letter_date)}', styles['date']))
-    story.append(Paragraph('To,', styles['to_line']))
-    story.append(Paragraph(_p(_salutation_name(faculty.name)), styles['name']))
+    body.append(Paragraph(f'Date: {_p(batch.letter_date)}', styles['date']))
+    body.append(Paragraph('To,', styles['to_line']))
+    body.append(Paragraph(_p(_salutation_name(faculty.name)), styles['name']))
     if faculty.designation:
-        story.append(Paragraph(_p(faculty.designation.rstrip(',') + ','), styles['to_line']))
+        body.append(Paragraph(_p(faculty.designation.rstrip(',') + ','), styles['to_line']))
     if faculty.college_name:
-        story.append(Paragraph(_p(faculty.college_name.rstrip(',') + ','), styles['to_line']))
+        body.append(Paragraph(_p(faculty.college_name.rstrip(',') + ','), styles['to_line']))
     if faculty.city_state:
-        story.append(Paragraph(_p(faculty.city_state), styles['to_line']))
+        body.append(Paragraph(_p(faculty.city_state), styles['to_line']))
     if faculty.email:
-        story.append(Paragraph(f'Email: {_p(faculty.email)}', styles['to_line']))
+        body.append(Paragraph(f'Email: {_p(faculty.email)}', styles['to_line']))
 
-    story.append(Paragraph(f'Sub: {_p(batch.subject_line)}', styles['sub']))
-    story.append(Paragraph('Dear Sir/Madam,', styles['intro']))
+    body.append(Paragraph(f'Sub: {_p(batch.subject_line)}', styles['sub']))
+    body.append(Paragraph('Dear Sir/Madam,', styles['intro']))
     sem_phrase = _semester_phrase_from_subject_line(batch.subject_line)
-    story.append(Paragraph(
+    body.append(Paragraph(
         'I am glad to appoint you as an external examiner to conduct practical examination '
         f'of {_p(sem_phrase)} as per the following schedule:',
         styles['intro'],
     ))
 
-    story.append(Paragraph(f'Subject Name: {_p(batch.subject_name)}', styles['detail']))
-    story.append(Paragraph(f'Date of Practical: {_p(batch.practical_date)}', styles['detail']))
-    story.append(Paragraph(f'Branch: {_p(batch.branch)}', styles['detail']))
-    story.append(Paragraph(f'Exam Time: {_p(batch.exam_time)}', styles['detail']))
-    story.append(Spacer(1, 1.5 * mm))
+    body.append(Paragraph(f'Subject Name: {_p(batch.subject_name)}', styles['detail']))
+    body.append(Paragraph(f'Date of Practical: {_p(batch.practical_date)}', styles['detail']))
+    body.append(Paragraph(f'Branch: {_p(batch.branch)}', styles['detail']))
+    body.append(Paragraph(f'Exam Time: {_p(batch.exam_time)}', styles['detail']))
+    body.append(Spacer(1, 3 * mm))
 
     # Numbered terms matching DOCX (1–5, remuneration under 1, then 6 + a–g)
-    story.append(Paragraph(f'<b>1.</b>  {_p(STATIC_TERMS[0])}', styles['term']))
-    story.append(Paragraph(_p(REMUNERATION_LINE), styles['term_bold']))
+    body.append(Paragraph(f'<b>1.</b>  {_p(STATIC_TERMS[0])}', styles['term']))
+    body.append(Paragraph(_p(REMUNERATION_LINE), styles['term_bold']))
     for i, text in enumerate(STATIC_TERMS[1:], start=2):
-        story.append(Paragraph(f'<b>{i}.</b>  {_p(text)}', styles['term']))
-    story.append(Paragraph('<b>6.</b>  Method of conducting practical exam:', styles['method_hdr']))
+        body.append(Paragraph(f'<b>{i}.</b>  {_p(text)}', styles['term']))
+    body.append(Paragraph('<b>6.</b>  Method of conducting practical exam:', styles['method_hdr']))
 
     for letter, text in zip('abcdefg', METHOD_ITEMS):
-        story.append(Paragraph(f'<b>{letter}.</b>&nbsp;&nbsp;{_p(text)}', styles['method']))
+        body.append(Paragraph(f'<b>{letter}.</b>&nbsp;&nbsp;{_p(text)}', styles['method']))
 
-    # Signature block — right aligned; compact image so it fits on page 1
+    # Signature block — right aligned
     sig_path, advisor_title, advisor_name = _resolve_signature(batch)
     sign_bits = [Paragraph('for', styles['sign_for'])]
     if sig_path:
         try:
-            sign_bits.append(Image(str(sig_path), width=18 * mm, height=12 * mm, hAlign='RIGHT'))
+            sign_bits.append(Image(str(sig_path), width=20 * mm, height=14 * mm, hAlign='RIGHT'))
         except Exception:
             pass
     sign_bits.append(Paragraph(_p(advisor_title), styles['sign']))
     sign_bits.append(Paragraph(_p(advisor_name), styles['sign']))
-    story.append(KeepTogether(sign_bits))
+    body.append(KeepTogether(sign_bits))
 
-    doc.build(story)
+    # Vertically centre the letter between header and footer (no large empty bottom).
+    _w, block_h = _listWrapOn(body, frame_w, None)
+    top_pad = max(0, (frame_h - block_h) / 2.0)
+    # Keep on one page: if slightly over, drop pad and build without KeepTogether wrap of all.
+    if block_h > frame_h:
+        doc.build(body)
+    else:
+        doc.build([Spacer(1, top_pad), KeepTogether(body)])
     return buffer.getvalue()
 
 
