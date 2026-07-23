@@ -146,58 +146,59 @@ def _asset(*parts):
 
 
 def _styles():
+    """Compact styles so the full invitation fits on one A4 page with letterhead."""
     font = 'Times-Roman'
     bold = 'Times-Bold'
     return {
         'date': ParagraphStyle(
-            'InviteDate', fontName=bold, fontSize=11, leading=13,
-            alignment=TA_RIGHT, spaceAfter=6,
+            'InviteDate', fontName=bold, fontSize=10, leading=11.5,
+            alignment=TA_RIGHT, spaceAfter=3,
         ),
         'to_line': ParagraphStyle(
-            'InviteTo', fontName=bold, fontSize=11, leading=13,
+            'InviteTo', fontName=bold, fontSize=10, leading=11.5,
             alignment=TA_LEFT, spaceAfter=0,
         ),
         'name': ParagraphStyle(
-            'InviteName', fontName=bold, fontSize=11, leading=13,
+            'InviteName', fontName=bold, fontSize=10, leading=11.5,
             alignment=TA_LEFT, spaceAfter=0,
         ),
         'sub': ParagraphStyle(
-            'InviteSub', fontName=bold, fontSize=11, leading=13,
-            alignment=TA_CENTER, spaceBefore=8, spaceAfter=6,
+            'InviteSub', fontName=bold, fontSize=10, leading=11.5,
+            alignment=TA_CENTER, spaceBefore=4, spaceAfter=3,
         ),
         'intro': ParagraphStyle(
-            'InviteIntro', fontName=font, fontSize=10.5, leading=13,
-            alignment=TA_LEFT, spaceAfter=6,
+            'InviteIntro', fontName=font, fontSize=9.5, leading=11.5,
+            alignment=TA_LEFT, spaceAfter=3,
         ),
         'detail': ParagraphStyle(
-            'InviteDetail', fontName=bold, fontSize=11, leading=13,
-            alignment=TA_CENTER, spaceAfter=1,
+            'InviteDetail', fontName=bold, fontSize=10, leading=11.5,
+            alignment=TA_CENTER, spaceAfter=0.5,
         ),
         'term': ParagraphStyle(
-            'InviteTerm', fontName=font, fontSize=10, leading=12.5,
-            alignment=TA_JUSTIFY, spaceAfter=2, leftIndent=4, firstLineIndent=0,
+            'InviteTerm', fontName=font, fontSize=9, leading=10.8,
+            alignment=TA_JUSTIFY, spaceAfter=1, leftIndent=3, firstLineIndent=0,
         ),
         'term_bold': ParagraphStyle(
-            'InviteTermBold', fontName=bold, fontSize=10, leading=12.5,
-            alignment=TA_JUSTIFY, spaceAfter=2, leftIndent=22,
+            'InviteTermBold', fontName=bold, fontSize=9, leading=10.8,
+            alignment=TA_JUSTIFY, spaceAfter=1, leftIndent=18,
         ),
         # Point 6 sub-items (a–g): clear indent under the parent line
         'method': ParagraphStyle(
-            'InviteMethod', fontName=font, fontSize=10, leading=12.5,
-            alignment=TA_JUSTIFY, spaceAfter=2,
-            leftIndent=28, firstLineIndent=0, bulletIndent=28,
+            'InviteMethod', fontName=font, fontSize=9, leading=10.8,
+            alignment=TA_JUSTIFY, spaceAfter=1,
+            leftIndent=22, firstLineIndent=0, bulletIndent=22,
         ),
         'method_hdr': ParagraphStyle(
-            'InviteMethodHdr', fontName=bold, fontSize=10, leading=12.5,
-            alignment=TA_JUSTIFY, spaceAfter=3, leftIndent=4,
+            'InviteMethodHdr', fontName=bold, fontSize=9, leading=10.8,
+            alignment=TA_JUSTIFY, spaceAfter=1.5, leftIndent=3,
         ),
         'sign': ParagraphStyle(
-            'InviteSign', fontName=bold, fontSize=11, leading=13,
+            'InviteSign', fontName=bold, fontSize=10, leading=11.5,
             alignment=TA_RIGHT, spaceAfter=0,
         ),
         'sign_for': ParagraphStyle(
-            'InviteFor', fontName=bold, fontSize=11, leading=13,
-            alignment=TA_RIGHT, spaceBefore=6, spaceAfter=1,
+            'InviteFor', fontName=bold, fontSize=10, leading=11.5,
+            alignment=TA_RIGHT, spaceBefore=3, spaceAfter=0,
         ),
     }
 
@@ -275,11 +276,11 @@ def build_invitation_pdf(batch, faculty):
     buffer = io.BytesIO()
     page_w, page_h = A4
 
-    # Same letterhead / margins as thanks letter (LJU_Letterhead background).
-    top_margin = 42 * mm
-    bottom_margin = 32 * mm
-    left_margin = 20 * mm
-    right_margin = 20 * mm
+    # Compact margins so body clears letterhead header/footer and stays on 1 page.
+    top_margin = 38 * mm
+    bottom_margin = 26 * mm
+    left_margin = 18 * mm
+    right_margin = 18 * mm
 
     frame = Frame(
         left_margin,
@@ -334,7 +335,7 @@ def build_invitation_pdf(batch, faculty):
     story.append(Paragraph(f'Date of Practical: {_p(batch.practical_date)}', styles['detail']))
     story.append(Paragraph(f'Branch: {_p(batch.branch)}', styles['detail']))
     story.append(Paragraph(f'Exam Time: {_p(batch.exam_time)}', styles['detail']))
-    story.append(Spacer(1, 3 * mm))
+    story.append(Spacer(1, 1.5 * mm))
 
     # Numbered terms matching DOCX (1–5, remuneration under 1, then 6 + a–g)
     story.append(Paragraph(f'<b>1.</b>  {_p(STATIC_TERMS[0])}', styles['term']))
@@ -346,12 +347,12 @@ def build_invitation_pdf(batch, faculty):
     for letter, text in zip('abcdefg', METHOD_ITEMS):
         story.append(Paragraph(f'<b>{letter}.</b>&nbsp;&nbsp;{_p(text)}', styles['method']))
 
-    # Signature block — right aligned; uses admin-saved signature when available
+    # Signature block — right aligned; compact image so it fits on page 1
     sig_path, advisor_title, advisor_name = _resolve_signature(batch)
     sign_bits = [Paragraph('for', styles['sign_for'])]
     if sig_path:
         try:
-            sign_bits.append(Image(str(sig_path), width=22 * mm, height=16 * mm, hAlign='RIGHT'))
+            sign_bits.append(Image(str(sig_path), width=18 * mm, height=12 * mm, hAlign='RIGHT'))
         except Exception:
             pass
     sign_bits.append(Paragraph(_p(advisor_title), styles['sign']))
